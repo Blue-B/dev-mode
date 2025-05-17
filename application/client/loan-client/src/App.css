@@ -1,0 +1,109 @@
+body {
+  background-color: #f5f7fa;
+  font-family: 'Noto Sans KR', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+header {
+  background-color: #2c3e50;
+  color: white;
+  font-size: 26px;
+  text-align: center;
+  padding: 20px 0;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+#body {
+  margin: 0 auto;
+  width: 70%;
+}
+
+.form-group {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+label {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  display: block;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+button {
+  width: 100%;
+  font-size: 16px;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
+/* 버튼 색상 */
+.btn-primary {
+  background-color: #337ab7;
+}
+
+.btn-success {
+  background-color: #5cb85c;
+}
+
+.btn-danger {
+  background-color: #d9534f;
+}
+
+.btn-warning {
+  background-color: #f0ad4e;
+}
+
+.btn-info {
+  background-color: #5bc0de;
+}
+
+.btn-default {
+  background-color: #e7e7e7;
+  color: #333;
+}
+
+h5 {
+  font-size: 16px;
+  margin-bottom: 15px;
+  color: green;
+}
+
+/* 결과 메시지 박스 */
+.result {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 30px auto;
+  width: 70%;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+}
+
+.result.success {
+  border-left: 5px solid #5cb85c;
+}
+
+.result.error {
+  border-left: 5px solid #d9534f;
+}

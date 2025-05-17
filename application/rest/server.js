@@ -1,4 +1,4 @@
-// 2. server.js (Loan API만 남긴 최종 버전)
+// 2. server.js (Loan API + React 정적 파일 처리 순서 수정)
 
 'use strict';
 
@@ -14,15 +14,8 @@ const HOST = '0.0.0.0';
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// static 파일 서비스 (index.html, app.js 제공)
-app.use(express.static(path.join(__dirname, '../client')));
-
-// 루트 접속 시 index.html 전달
-app.get('/', function(req, res){
-    res.sendFile(path.join(__dirname, '../client/index.html'));
-});
-
 // ================= 대출 시스템 API ==================
+// 반드시 React 정적 파일 서빙보다 먼저 정의해야 함!
 
 // 대출 요청 생성
 app.get('/createLoan', function (req, res) {
@@ -62,6 +55,16 @@ app.get('/queryLoan', function (req, res) {
 // 전체 대출 요청 조회
 app.get('/queryAllLoans', function (req, res) {
     sdk.send(true, 'QueryAllLoanRequests', [], res);
+});
+
+// ================= 정적 파일 서비스 및 React 라우팅 ==================
+
+const clientPath = path.join(__dirname, '../client');
+app.use(express.static(clientPath));
+
+// 마지막에만 index.html 반환 (SPA 대응용)
+app.get('*', function (req, res) {
+    res.sendFile(path.join(clientPath, 'index.html'));
 });
 
 // 서버 시작
