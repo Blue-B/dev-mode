@@ -102,7 +102,7 @@ import Friend from './pages/Friend';
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-100 p-4">
+      <div className="min-h-screen bg-white">
         <Routes>
           {/* <Route path="/" element={<Dashboard />} /> */}
           <Route path="/friend" element={<Friend />} />
