@@ -1,176 +1,184 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// 1. abstore.go (대출 기능만 남긴 최종 버전)
 
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
-	"strconv"
+	"time"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// ABstore Chaincode implementation
-type ABstore struct {
+// LoanRequest 구조체
+type LoanRequest struct {
+	ID           string `json:"id"`
+	Requester    string `json:"requester"`
+	Amount       int    `json:"amount"`
+	DurationDays int    `json:"durationDays"`
+	Status       string `json:"status"`
+	Provider     string `json:"provider"`
+	StartTime    int64  `json:"startTime"`
+}
+
+// 체인코드 구조체
+type LoanContract struct {
 	contractapi.Contract
 }
-var Admin = "Admin"
 
-func (t *ABstore) Init(ctx contractapi.TransactionContextInterface, A string, Aval int, B string, Bval int) error {
-	fmt.Println("ABstore Init")
-	var err error
-	// Initialize the chaincode
-	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
-	// Write the state to the ledger
-	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
+// 대출 요청 생성
+func (t *LoanContract) CreateLoanRequest(ctx contractapi.TransactionContextInterface, id, requester string, amount, durationDays int) error {
+	exists, err := t.LoanRequestExists(ctx, id)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("loan request %s already exists", id)
+	}
+
+	loan := LoanRequest{
+		ID: id,
+		Requester: requester,
+		Amount: amount,
+		DurationDays: durationDays,
+		Status: "Pending",
+		Provider: "",
+		StartTime: 0,
+	}
+
+	loanJSON, err := json.Marshal(loan)
 	if err != nil {
 		return err
 	}
 
-	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
-	if err != nil {
-		return err
-	}
-
-	err = ctx.GetStub().PutState(Admin, []byte("0"))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ctx.GetStub().PutState(id, loanJSON)
 }
 
-// Transaction makes payment of X units from A to B
-func (t *ABstore) Invoke(ctx contractapi.TransactionContextInterface, A, B string, X int) error {
-	var err error
-	var Aval int
-	var Bval int
-	var Adminval int
-	// Get the state from the ledger
-	// TODO: will be nice to have a GetAllState call to ledger
-	Avalbytes, err := ctx.GetStub().GetState(A)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
+// 대출 요청 승인
+func (t *LoanContract) ApproveLoanRequest(ctx contractapi.TransactionContextInterface, id, provider string) error {
+	loanJSON, err := ctx.GetStub().GetState(id)
+	if err != nil || loanJSON == nil {
+		return fmt.Errorf("loan request %s does not exist", id)
 	}
-	if Avalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Aval, _ = strconv.Atoi(string(Avalbytes))
 
-	Bvalbytes, err := ctx.GetStub().GetState(B)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
-	}
-	if Bvalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Bval, _ = strconv.Atoi(string(Bvalbytes))
-
-	Adminvalbytes, err := ctx.GetStub().GetState(Admin)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
-	}
-	if Adminvalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Adminval, _ = strconv.Atoi(string(Adminvalbytes))
-
-	// Perform the execution
-	Aval = Aval - X
-	Bval = Bval + ( X - X / 10 )
-	Adminval = Adminval + ( X / 10)
-	fmt.Printf("Aval = %d, Bval = %d Adminval = %d\n", Aval, Bval, Adminval)
-
-	// Write the state back to the ledger
-	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
+	var loan LoanRequest
+	err = json.Unmarshal(loanJSON, &loan)
 	if err != nil {
 		return err
 	}
 
-	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
+	if loan.Status != "Pending" {
+		return fmt.Errorf("loan request %s is not pending", id)
+	}
+
+	loan.Status = "Active"
+	loan.Provider = provider
+	loan.StartTime = time.Now().Unix()
+
+	updatedLoanJSON, err := json.Marshal(loan)
 	if err != nil {
 		return err
 	}
 
-	err = ctx.GetStub().PutState(Admin, []byte(strconv.Itoa(Adminval)))
+	return ctx.GetStub().PutState(id, updatedLoanJSON)
+}
+
+// 대출 요청 삭제
+func (t *LoanContract) DeleteLoanRequest(ctx contractapi.TransactionContextInterface, id string) error {
+	exists, err := t.LoanRequestExists(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("loan request %s does not exist", id)
+	}
+	return ctx.GetStub().DelState(id)
+}
+
+// 대출 요청 수정
+func (t *LoanContract) UpdateLoanRequest(ctx contractapi.TransactionContextInterface, id string, newAmount, newDurationDays int) error {
+	loanJSON, err := ctx.GetStub().GetState(id)
+	if err != nil || loanJSON == nil {
+		return fmt.Errorf("loan request %s does not exist", id)
+	}
+
+	var loan LoanRequest
+	err = json.Unmarshal(loanJSON, &loan)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
+	if loan.Status != "Pending" {
+		return fmt.Errorf("cannot update loan request %s because it is not pending", id)
+	}
 
-// Delete  an entity from state
-func (t *ABstore) Delete(ctx contractapi.TransactionContextInterface, A string) error {
+	loan.Amount = newAmount
+	loan.DurationDays = newDurationDays
 
-	// Delete the key from the state in ledger
-	err := ctx.GetStub().DelState(A)
+	updatedLoanJSON, err := json.Marshal(loan)
 	if err != nil {
-		return fmt.Errorf("Failed to delete state")
+		return err
 	}
 
-	return nil
+	return ctx.GetStub().PutState(id, updatedLoanJSON)
 }
 
-// Query callback representing the query of a chaincode
-func (t *ABstore) Query(ctx contractapi.TransactionContextInterface, A string) (string, error) {
-	var err error
-	// Get the state from the ledger
-	Avalbytes, err := ctx.GetStub().GetState(A)
+// 단일 대출 요청 조회
+func (t *LoanContract) QueryLoanRequest(ctx contractapi.TransactionContextInterface, id string) (*LoanRequest, error) {
+	loanJSON, err := ctx.GetStub().GetState(id)
+	if err != nil || loanJSON == nil {
+		return nil, fmt.Errorf("loan request %s does not exist", id)
+	}
+
+	var loan LoanRequest
+	err = json.Unmarshal(loanJSON, &loan)
 	if err != nil {
-		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return "", errors.New(jsonResp)
+		return nil, err
 	}
 
-	if Avalbytes == nil {
-		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return "", errors.New(jsonResp)
+	return &loan, nil
+}
+
+// 전체 대출 요청 조회
+func (t *LoanContract) QueryAllLoanRequests(ctx contractapi.TransactionContextInterface) ([]*LoanRequest, error) {
+	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
+	if err != nil {
+		return nil, err
 	}
+	defer resultsIterator.Close()
 
-	jsonResp := "{\"Name\":\"" + A + "\",\"Amount\":\"" + string(Avalbytes) + "\"}"
-	fmt.Printf("Query Response:%s\n", jsonResp)
-	return string(Avalbytes), nil
+	var loans []*LoanRequest
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var loan LoanRequest
+		err = json.Unmarshal(queryResponse.Value, &loan)
+		if err == nil {
+			loans = append(loans, &loan)
+		}
+	}
+	return loans, nil
 }
 
-func (t *ABstore) GetAllQuery(ctx contractapi.TransactionContextInterface) ([]string, error) {
-    resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
-    if err != nil {
-        return nil, err
-    }
-    defer resultsIterator.Close()
-    var wallet []string
-    for resultsIterator.HasNext() {
-        queryResponse, err := resultsIterator.Next()
-        if err != nil {
-            return nil, err
-        }
-        jsonResp := "{\"Name\":\"" + string(queryResponse.Key) + "\",\"Amount\":\"" + string(queryResponse.Value) + "\"}"
-        wallet = append(wallet, jsonResp)
-    }
-    return wallet, nil
+// 대출 요청 존재 여부
+func (t *LoanContract) LoanRequestExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
+	loanJSON, err := ctx.GetStub().GetState(id)
+	if err != nil {
+		return false, err
+	}
+	return loanJSON != nil, nil
 }
-
 
 func main() {
-	cc, err := contractapi.NewChaincode(new(ABstore))
+	cc, err := contractapi.NewChaincode(new(LoanContract))
 	if err != nil {
 		panic(err.Error())
 	}
+
 	if err := cc.Start(); err != nil {
-		fmt.Printf("Error starting ABstore chaincode: %s", err)
+		fmt.Printf("Error starting LoanContract chaincode: %s", err)
 	}
 }

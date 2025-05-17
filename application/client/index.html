@@ -1,83 +1,120 @@
 <!DOCTYPE html>
-<html>
- <head>
-   <title>Hyperledger Fabric AB Store Application</title>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Hyperledger Fabric 깐부 대출 DApp</title>
 
-   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
-   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.3/angular.min.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.3/angular.min.js"></script>
+  <script type="text/javascript" src="app.js"></script>
 
-   <style type="text/css">
-      header{
-        background-color: lightgray;
-        font-size:20px;
-        padding:20px;
-      }
-      header, .form-group{
-        margin-bottom: 3%;
-      }
+  <style type="text/css">
+    body {
+      background-color: #f5f7fa;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+    header {
+      background-color: #2c3e50;
+      color: white;
+      font-size: 26px;
+      text-align: center;
+      padding: 20px 0;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    #body {
+      margin: 0 auto;
+      width: 70%;
+    }
+    .form-group {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    label {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .form-control {
+      margin-bottom: 15px;
+      border-radius: 6px;
+      box-shadow: none;
+    }
+    .btn {
+      width: 100%;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 6px;
+    }
+    h5 {
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
 
-      .form-group{
-        width:50%;
-      }
-      #body{
-        margin-left:3%;
-        margin-right:3%;
-      }
-      .form-control{
-        margin: 8px;
-      }
-      label{
-        font-size:20px;
-      }
-   </style>
- </head>
- <body ng-app="application" ng-controller="AppCtrl">
-    <header>
-      <div id="left_header">Hyperledger Fabric AB Store Application</div>
-    </header>
-    <div id="body">
-        <div class="form-group">
-            <label>Init</label>
-            <h5 style="color:green;margin-bottom:2%" id="success_init">{{init_ab}}</h5>
-            <br>
-            A: <input class="form-control" type="text" placeholder="Ex: Hyper" ng-model="abstore.a">
-            A Value: <input class="form-control" type="text" placeholder="Ex: 100" ng-model="abstore.aval">
-            B: <input class="form-control" type="text" placeholder="Ex: Ledger" ng-model="abstore.b">
-            B Value: <input class="form-control" type="text" placeholder="Ex: 0" ng-model="abstore.bval">
-            <input id="initAB" type="submit" value="Create" class="btn btn-primary" ng-click="initAB()">
-          </div>
-          <div class="form-group">
-            <label>Invoke</label>
-            <h5 style="color:green;margin-bottom:2%" id="success_init">{{invoke_ab}}</h5>
-            <br>
-            A: <input class="form-control" type="text" placeholder="Ex: Hyper" ng-model="abstore.a">
-            B: <input class="form-control" type="text" placeholder="Ex: Ledger" ng-model="abstore.b">
-            Value: <input class="form-control" type="text" placeholder="Ex: 0" ng-model="abstore.value">
-            <input id="invokeAB" type="submit" value="Create" class="btn btn-primary" ng-click="invokeAB()">
-          </div>
-          <div class="form-group">
-            <label>Delete</label>
-            <h5 style="color:green;margin-bottom:2%" id="success_init">{{delete_ab}}</h5>
-            <br>
-            Name: <input class="form-control" type="text" placeholder="Ex: Hyper" ng-model="abstore.a">
-            <input id="deleteAB" type="submit" value="Delete" class="btn btn-primary" ng-click="deleteAB()">
-          </div>
-      <hr>
-      <div class="form-group">
-        <h5 style="color:green;margin-bottom:2%" id="success_qurey">{{query_ab}}</h5>
-        <label>Query</label>
-        <p><input class="form-control" type="text" placeholder="Ex: A" ng-model="walletid">
-        <input id="queryAB" type="submit" value="Search" class="btn btn-primary" ng-click="queryAB()"></p>
-      </div>
-      <div class="form-group">
-        <h5 style="color:green;margin-bottom:2%" id="success_qureyAll">{{query_all}}</h5>
-        <label>Query All</label>
-        <p><input id="queryAll" type="submit" value="Search" class="btn btn-primary" ng-click="queryAll()"></p>
-      </div>
+<body ng-app="application" ng-controller="AppCtrl">
+
+  <header>
+    Hyperledger Fabric 깐부 대출 DApp
+  </header>
+
+  <div id="body">
+
+    <div class="form-group">
+      <label>대출 요청 생성</label>
+      <h5 style="color:green" id="success_createLoan">{{create_loan}}</h5>
+      대출 ID: <input class="form-control" type="text" placeholder="대출 ID 입력" ng-model="loaninfo.loanid">
+      요청자 이름: <input class="form-control" type="text" placeholder="요청자 이름 입력" ng-model="loaninfo.requester">
+      대출 금액: <input class="form-control" type="text" placeholder="대출 금액 입력" ng-model="loaninfo.amount">
+      대출 기간 (일수): <input class="form-control" type="text" placeholder="대출 기간 입력" ng-model="loaninfo.durationDays">
+      <button class="btn btn-primary" ng-click="createLoan()">대출 요청 생성</button>
     </div>
-  </body>
-  <script type="text/javascript" src="app.js"> </script>
- </html>
- 
+
+    <div class="form-group">
+      <label>대출 요청 승인</label>
+      <h5 style="color:green" id="success_approveLoan">{{approve_loan}}</h5>
+      대출 ID: <input class="form-control" type="text" placeholder="승인할 대출 ID 입력" ng-model="loaninfo.loanid">
+      대출 제공자 이름: <input class="form-control" type="text" placeholder="대출 제공자 이름 입력" ng-model="loaninfo.provider">
+      <button class="btn btn-success" ng-click="approveLoan()">대출 요청 승인</button>
+    </div>
+
+    <div class="form-group">
+      <label>대출 요청 삭제</label>
+      <h5 style="color:green" id="success_deleteLoan">{{delete_loan}}</h5>
+      대출 ID: <input class="form-control" type="text" placeholder="삭제할 대출 ID 입력" ng-model="loaninfo.loanid">
+      <button class="btn btn-danger" ng-click="deleteLoan()">대출 요청 삭제</button>
+    </div>
+
+    <div class="form-group">
+      <label>대출 요청 수정</label>
+      <h5 style="color:green" id="success_updateLoan">{{update_loan}}</h5>
+      대출 ID: <input class="form-control" type="text" placeholder="수정할 대출 ID 입력" ng-model="loaninfo.loanid">
+      새 대출 금액: <input class="form-control" type="text" placeholder="새 금액 입력" ng-model="loaninfo.amount">
+      새 대출 기간 (일수): <input class="form-control" type="text" placeholder="새 기간 입력" ng-model="loaninfo.durationDays">
+      <button class="btn btn-warning" ng-click="updateLoan()">대출 요청 수정</button>
+    </div>
+
+    <div class="form-group">
+      <label>단일 대출 요청 조회</label>
+      <h5 style="color:green" id="success_queryLoan">{{query_loan}}</h5>
+      대출 ID: <input class="form-control" type="text" placeholder="조회할 대출 ID 입력" ng-model="loaninfo.loanid">
+      <button class="btn btn-info" ng-click="queryLoan()">대출 요청 조회</button>
+    </div>
+
+    <div class="form-group">
+      <label>전체 대출 요청 조회</label>
+      <h5 style="color:green" id="success_queryAllLoans">{{query_all_loans}}</h5>
+      <button class="btn btn-default" ng-click="queryAllLoans()">전체 대출 요청 조회</button>
+    </div>
+
+  </div>
+
+</body>
+</html>
