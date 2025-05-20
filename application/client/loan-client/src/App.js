@@ -94,24 +94,38 @@
 // export default App;
 
 // src/App.js
-import React from 'react';
-import './App.css';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Friend from './pages/Friend';
-import FinancialStatus from './pages/FinancialStatus';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Nav from "./components/Nav";
+// import Header from "./Header";
+// import Dashboard from "./pages/Dashboard";
+// import LoanPool from "./pages/LoanPool";
+import Friend from "./pages/Friend";
+import FinancialStatus from "./pages/FinancialStatus";
+// import Mypage from "./pages/Mypage";
+// import Setting from "./pages/Setting";
 
 function App() {
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-white">
-        <Routes>
-          {/* <Route path="/" element={<Dashboard />} /> */}
-          <Route path="/friend" element={<Friend />} />
-          <Route path="/financial-status" element={<FinancialStatus />} />
-
-        </Routes>
+    <Router>
+    <div className="flex h-screen">
+      <Nav />
+      <div className="flex flex-col flex-1">
+        {/* <Header /> */}
+        <main className="flex-1 overflow-y-auto p-6 bg-white">
+          <Routes>
+            <Route path="/" element={<Friend />} />
+            {/* <Route path="/dashboard" element={<Dashboard />} /> */}
+            {/* <Route path="/loanpool" element={<LoanPool />} /> */}
+            <Route path="/friend" element={<Friend />} />
+            <Route path="/financial-status" element={<FinancialStatus />} />
+            {/* <Route path="/mypage" element={<Mypage />} /> */}
+            {/* <Route path="/setting" element={<Setting />} /> */}
+          </Routes>
+        </main>
       </div>
-    </BrowserRouter>
+    </div>
+  </Router>
   );
 }
 
