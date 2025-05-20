@@ -97,35 +97,40 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Nav from "./components/Nav";
-// import Header from "./Header";
+import Header from "./components/Header";
 // import Dashboard from "./pages/Dashboard";
 // import LoanPool from "./pages/LoanPool";
 import Friend from "./pages/Friend";
 import FinancialStatus from "./pages/FinancialStatus";
+// import Main from "./pages/Main";
 // import Mypage from "./pages/Mypage";
 // import Setting from "./pages/Setting";
 
 function App() {
   return (
     <Router>
-    <div className="flex h-screen">
-      <Nav />
-      <div className="flex flex-col flex-1">
-        {/* <Header /> */}
-        <main className="flex-1 overflow-y-auto p-6 bg-white">
-          <Routes>
-            <Route path="/" element={<Friend />} />
+      <div className="min-h-screen bg-white">
+        {/* 상단 고정 헤더 */}
+        <Header />
+
+        {/* 헤더 아래 전체 레이아웃: Nav + main */}
+        <div className="flex pt-[72px]"> {/* pt 값은 Header 높이만큼 확보 */}
+          <Nav />
+          <main className="flex-1 overflow-y-auto p-6">
+            <Routes>
+               {/* <Route path="/" element={<Main  />} /> */}
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             {/* <Route path="/loanpool" element={<LoanPool />} /> */}
             <Route path="/friend" element={<Friend />} />
             <Route path="/financial-status" element={<FinancialStatus />} />
             {/* <Route path="/mypage" element={<Mypage />} /> */}
             {/* <Route path="/setting" element={<Setting />} /> */}
-          </Routes>
-        </main>
+            </Routes>
+          </main>
+        </div>
       </div>
-    </div>
   </Router>
+
   );
 }
 
