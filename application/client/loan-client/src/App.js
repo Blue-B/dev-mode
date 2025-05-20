@@ -98,6 +98,7 @@ import React from 'react';
 import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Friend from './pages/Friend';
+import FinancialStatus from './pages/FinancialStatus';
 
 function App() {
   return (
@@ -106,6 +107,8 @@ function App() {
         <Routes>
           {/* <Route path="/" element={<Dashboard />} /> */}
           <Route path="/friend" element={<Friend />} />
+          <Route path="/financial-status" element={<FinancialStatus />} />
+
         </Routes>
       </div>
     </BrowserRouter>
