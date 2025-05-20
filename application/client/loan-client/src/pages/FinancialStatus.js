@@ -105,11 +105,11 @@ const FinancialStatus = () => {
           <tbody>
             {loans.map((loan, idx) => (
               <tr key={idx} className="border-t">
-                <td className="px-4 py-2">{loan.amount}</td>
-                <td className="px-4 py-2">{loan.rate}</td>
-                <td className="px-4 py-2">{loan.period}</td>
-                <td className="px-4 py-2">{loan.start}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3">{loan.amount}</td>
+                <td className="px-4 py-3">{loan.rate}</td>
+                <td className="px-4 py-3">{loan.period}</td>
+                <td className="px-4 py-3">{loan.start}</td>
+                <td className="px-4 py-3">
                   <span className={`px-3 py-1 rounded-full text-sm  ${statusColors[loan.status]}`}> 
                     {loan.status}
                   </span>
