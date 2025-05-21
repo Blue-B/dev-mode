@@ -1,4 +1,3 @@
-import './index.css';
 // src/pages/Setting.js
 import React, { useState } from "react";
 
