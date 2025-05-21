@@ -25,7 +25,7 @@ const Nav = () => {
     { label: "대시보드", icon: <HomeIcon className="w-5 h-5" />, path: "/dashboard" },
     { label: "대출풀", icon: <ChartBarIcon className="w-5 h-5" />, path: "/loanpool" },
     { label: "친구", icon: <UsersIcon className="w-5 h-5" />, path: "/friend" },
-    { label: "자금현황", icon: <WalletIcon className="w-5 h-5" />, path: "/financial-status" },
+    { label: "자금현황", icon: <WalletIcon className="w-5 h-5" />, path: "/financialstatus" },
     { label: "내 정보", icon: <UserIcon className="w-5 h-5" />, path: "/mypage" },
   ];
 

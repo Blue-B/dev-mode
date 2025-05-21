@@ -9,6 +9,8 @@ import Friend from "./pages/Friend";
 import Loanpool from "./pages/LoanPool";
 import Setting from "./pages/Setting";
 import Signup from "./pages/Signup";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 
 function AppLayout({ children }) {
   return (
@@ -41,7 +43,7 @@ function App() {
           }
         />
         <Route
-          path="/Constract"
+          path="/constract"
           element={
             <AppLayout>
               <Constract />
@@ -57,7 +59,7 @@ function App() {
           }
         />
         <Route
-          path="/Friend"
+          path="/friend"
           element={
             <AppLayout>
               <Friend />
@@ -65,7 +67,7 @@ function App() {
           }
         />
         <Route
-          path="/Loanpool"
+          path="/loanpool"
           element={
             <AppLayout>
               <Loanpool />
@@ -73,7 +75,7 @@ function App() {
           }
         />
         <Route
-          path="/Setting"
+          path="/setting"
           element={
             <AppLayout>
               <Setting />
@@ -81,10 +83,26 @@ function App() {
           }
         />
         <Route
-          path="/Signup"
+          path="/signup"
           element={
             <AppLayout>
               <Signup />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <AppLayout>
+              <Login />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <AppLayout>
+              <Dashboard />
             </AppLayout>
           }
         />
