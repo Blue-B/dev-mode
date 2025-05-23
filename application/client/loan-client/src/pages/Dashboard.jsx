@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createWallet, getWalletBalance, createLoan, queryAllLoans, approveLoan, denyLoan } from '../services/api';
+import { v4 as uuidv4 } from 'uuid';
+
+// 1개월 ~ 60개월까지 반복 생성
+const durationOptions = Array.from({ length: 60 }, (_, i) => i + 1);
 
 const Dashboard = () => {
     const [walletAddress, setWalletAddress] = useState('');
@@ -8,13 +12,16 @@ const Dashboard = () => {
     const [loans, setLoans] = useState([]);
     const [wallets, setWallets] = useState([]);
     const [newLoan, setNewLoan] = useState({
-        id: '',
         lender: '',
         borrower: '',
         amount: 0,
         durationDays: 0,
-        interestRate: 0
+        interestRate: 0,
+        endDateTimestamp: null // 상환일
+
     });
+    const [selectedMonths, setSelectedMonths] = useState(0);
+    const [calculatedEndDate, setCalculatedEndDate] = useState(null);
 
     // 지갑 생성
     const handleCreateWallet = async () => {
@@ -42,30 +49,57 @@ const Dashboard = () => {
     // 대출 요청 생성
     const handleCreateLoan = async () => {
         try {
-            if (!newLoan.id || !newLoan.lender || !newLoan.borrower || !newLoan.amount || !newLoan.durationDays || !newLoan.interestRate) {
-                alert('모든 필드를 입력해주세요.');
-                return;
-            }
+        const { lender, borrower, amount, interestRate } = newLoan;
 
-            if (newLoan.lender === newLoan.borrower) {
-                alert('대출자와 차입자는 다른 지갑이어야 합니다.');
-                return;
-            }
+        if (!lender || !borrower || !amount || !selectedMonths || !interestRate) {
+            alert('모든 필드를 입력해주세요.');
+            return;
+        }
 
-            await createLoan(newLoan);
-            alert('대출 요청이 생성되었습니다!');
-            fetchLoans();
-            setNewLoan({
-                id: '',
-                lender: '',
-                borrower: '',
-                amount: 0,
-                durationDays: 0,
-                interestRate: 0
-            });
+        if (lender === borrower) {
+            alert('대출자와 차입자는 다른 지갑이어야 합니다.');
+            return;
+        }
+
+        const id = uuidv4();
+        const durationDays = selectedMonths * 30;
+        const endDate = calculateEndDate(new Date(), selectedMonths);
+        const endDateTimestamp = endDate.getTime();
+
+        const completeLoan = {
+            ...newLoan,
+            id,
+            durationDays,
+            endDateTimestamp
+        };
+
+        await createLoan(completeLoan);
+        alert('대출 요청이 생성되었습니다!');
+        fetchLoans();
+        setNewLoan({ lender: '', borrower: '', amount: 0, durationDays: 0, interestRate: 0, endDateTimestamp: null });
+        setSelectedMonths(0);
+        setCalculatedEndDate(null);
         } catch (error) {
-            console.error('대출 요청 생성 실패:', error);
-            alert('대출 요청 생성 실패: ' + (error.response?.data?.message || error.message));
+        console.error('대출 요청 생성 실패:', error);
+        alert('대출 요청 생성 실패: ' + (error.response?.data?.message || error.message));
+        }
+    };
+
+    // 개월 수 → 종료일 계산 함수
+    const calculateEndDate = (startDate, months) => {
+        const end = new Date(startDate);
+        end.setMonth(end.getMonth() + months);
+        return end;
+    };
+
+    const handleDurationChange = (e) => {
+        const months = parseInt(e.target.value);
+        setSelectedMonths(months);
+        if (!isNaN(months)) {
+        const end = calculateEndDate(new Date(), months);
+        setCalculatedEndDate(end);
+        } else {
+        setCalculatedEndDate(null);
         }
     };
 
@@ -195,15 +229,7 @@ const Dashboard = () => {
             <div className="p-8 border rounded-xl mb-12">
                 <h2 className="text-xl font-semibold mb-6">새 대출 요청</h2>
                 <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center border rounded-lg px-4 py-3">
-                        <input
-                            type="text"
-                            value={newLoan.id}
-                            onChange={(e) => setNewLoan({...newLoan, id: e.target.value})}
-                            placeholder="대출 ID"
-                            className="flex-grow outline-none placeholder-gray-400 text-lg"
-                        />
-                    </div>
+               
                     <select
                         value={newLoan.lender}
                         onChange={(e) => setNewLoan({...newLoan, lender: e.target.value})}
@@ -234,17 +260,26 @@ const Dashboard = () => {
                         />
                         <span className="text-gray-400 ml-2">KRW</span>
                     </div>
-                    <select
-                        value={newLoan.durationDays}
-                        onChange={(e) => setNewLoan({...newLoan, durationDays: parseInt(e.target.value) || 0})}
-                        className="border px-4 py-3 rounded-lg w-full text-lg"
-                    >
-                        <option value="">기간 선택</option>
-                        <option value="30">1개월</option>
-                        <option value="90">3개월</option>
-                        <option value="180">6개월</option>
-                        <option value="365">1년</option>
-                    </select>
+
+                      {/* 대출 기간 + 예정일 */}
+    <div className="relative">
+      <select
+        value={selectedMonths}
+        onChange={handleDurationChange}
+        className="border px-4 py-3 rounded-lg w-full text-lg"
+      >
+        <option value="">상환 기간 선택 (개월)</option>
+        {durationOptions.map((month) => (
+          <option key={month} value={month}>{month}개월</option>
+        ))}
+      </select>
+      {calculatedEndDate && (
+        <span className="absolute right-4 top-[13px] text-sm text-gray-500">
+          {calculatedEndDate.toISOString().split("T")[0]}
+        </span>
+      )}
+    </div>
+
                     <div className="flex items-center border rounded-lg px-4 py-3">
                         <input
                             type="number"
