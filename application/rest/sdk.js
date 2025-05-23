@@ -32,7 +32,14 @@ async function send(type, func, args, res, result){
 
             if(type){
                 result = await contract.evaluateTransaction(func, ...args);
-                res.json(result.toString());
+                try {
+                    // JSON 파싱 시도
+                    const parsedResult = JSON.parse(result.toString());
+                    res.json(parsedResult);
+                } catch (e) {
+                    // JSON 파싱 실패 시 원본 문자열 반환
+                    res.json(result.toString());
+                }
             } else {
                 result = await contract.submitTransaction(func, ...args);
                 res.json("Success");
