@@ -52,9 +52,12 @@ const Main = () => {
                 value={loanAmount}
                 onChange={(e) => setLoanAmount(e.target.value)}
               />
-              <button className="bg-blue-500 text-white px-6 py-3 rounded-md md:rounded-l-none whitespace-nowrap font-medium">
-                즉시 대출 신청
-              </button>
+              <NavLink to="/dashboard">
+                <button className="bg-blue-500 text-white px-6 py-3 rounded-md md:rounded-l-none whitespace-nowrap font-medium">
+                  즉시 대출 신청
+                </button>
+              </NavLink>
+              
             </div>
           </div>
         </div>
