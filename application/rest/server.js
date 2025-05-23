@@ -10,39 +10,62 @@ let sdk = require('./sdk');
 const PORT = 8001;
 const HOST = '0.0.0.0';
 
+// CORS 설정 추가
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 // body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ================= 지갑 API ==================
+
+// 지갑 생성
+app.get('/createWallet', function (req, res) {
+    let { address, initialBalance } = req.query;
+    let args = [address, initialBalance || "0"];  // 초기 잔액이 없으면 0으로 설정
+    sdk.send(false, 'CreateWallet', args, res);
+});
+
+// 지갑 잔액 조회
+app.get('/getWalletBalance', function (req, res) {
+    let { address } = req.query;
+    let args = [address];
+    sdk.send(true, 'GetWalletBalance', args, res);
+});
+
 // ================= 대출 시스템 API ==================
-// 반드시 React 정적 파일 서빙보다 먼저 정의해야 함!
 
 // 대출 요청 생성
 app.get('/createLoan', function (req, res) {
-    let { id, requester, amount, durationDays } = req.query;
-    let args = [id, requester, amount, durationDays];
+    let { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+    let args = [id, lender, borrower, amount, durationDays, interestRate];
     sdk.send(false, 'CreateLoanRequest', args, res);
 });
 
-// 대출 요청 승인
+// 대출 승인
 app.get('/approveLoan', function (req, res) {
-    let { id, provider } = req.query;
-    let args = [id, provider];
+    let { id } = req.query;
+    let args = [id];
     sdk.send(false, 'ApproveLoanRequest', args, res);
 });
 
-// 대출 요청 삭제
-app.get('/deleteLoan', function (req, res) {
+// 대출 거절
+app.get('/denyLoan', function (req, res) {
     let { id } = req.query;
     let args = [id];
-    sdk.send(false, 'DeleteLoanRequest', args, res);
+    sdk.send(false, 'DenyLoanRequest', args, res);
 });
 
-// 대출 요청 수정
-app.get('/updateLoan', function (req, res) {
-    let { id, newAmount, newDurationDays } = req.query;
-    let args = [id, newAmount, newDurationDays];
-    sdk.send(false, 'UpdateLoanRequest', args, res);
+// 대출 상환
+app.get('/repayLoan', function (req, res) {
+    let { id } = req.query;
+    let args = [id];
+    sdk.send(false, 'RepayLoan', args, res);
 });
 
 // 단일 대출 요청 조회
