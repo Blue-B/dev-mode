@@ -1,13 +1,37 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
+import { createClient } from "@supabase/supabase-js";
+
+// 환경변수 또는 실제 발급받은 키로 대체하세요
+const supabase = createClient(
+  "https://nujgcyryhvogafapepyn.supabase.co", // Supabase URL
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY" // Supabase public anon key
+);
 
 const Login = () => {
+  // 구글 로그인 핸들러
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + "/dashboard", // 로그인 후 이동할 경로
+      },
+    });
+    if (error) {
+      alert("구글 로그인 실패: " + error.message);
+    }
+  };
+
   return (
     <div className="bg-white min-h-screen flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-md text-center scale-105">
         <h1 className="text-3xl font-bold mb-3">깐부대출에 오신걸 환영합니다.</h1>
         <p className="text-base text-gray-500 mb-7">블록체인 기반 대출 시스템</p>
 
-        <button className="w-full bg-gray-100 border border-gray-300 rounded-full py-3 mb-7 flex items-center justify-center hover:bg-gray-200 text-lg">
+        <button
+          className="w-full bg-gray-100 border border-gray-300 rounded-full py-3 mb-7 flex items-center justify-center hover:bg-gray-200 text-lg"
+          onClick={handleGoogleLogin}
+        >
           <svg className="w-6 h-6 mr-2" viewBox="0 0 533.5 544.3">
             <path fill="#4285f4" d="M533.5 278.4c0-17.4-1.4-34.3-4.1-50.6H272v95.8h146.9c-6.3 33.9-25 62.6-53.4 81.9v68.1h86.4c50.5-46.5 81.6-115.2 81.6-195.2z"/>
             <path fill="#34a853" d="M272 544.3c72.6 0 133.5-24 178-65.1l-86.4-68.1c-23.9 16.1-54.6 25.5-91.6 25.5-70.5 0-130.2-47.6-151.5-111.6h-89.3v69.9c44.5 88.3 135.9 149.4 240.8 149.4z"/>
@@ -35,7 +59,7 @@ const Login = () => {
             />
           </div>
           <div className="text-right text-sm">
-            <a href="#" className="text-blue-500 hover:underline">비밀번호를 잊으셨나요?</a>
+            <NavLink to="/password" className="text-blue-500 hover:underline">비밀번호를 잊으셨나요?</NavLink>
           </div>
           <button
             type="submit"
@@ -47,7 +71,7 @@ const Login = () => {
 
         <p className="text-base mt-5">
           계정이 없으신가요?{' '}
-          <a href="#" className="text-blue-500 hover:underline">회원가입하기</a>
+          <NavLink to="/signup" className="text-blue-500 hover:underline">회원가입하기</NavLink>
         </p>
       </div>
     </div>
