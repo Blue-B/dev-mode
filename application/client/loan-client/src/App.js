@@ -11,6 +11,12 @@ import Setting from "./pages/Setting";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import PasswordFind from "./pages/PassWord";
+import ServiceIntroduction from "./pages/Service-Introduction";
+import ServiceMethod from "./pages/Service-Method";
+import Inquiry from "./pages/Inquiry";
+import Question from "./pages/Question";
+import EnsuringStability from "./pages/Ensuring-Stability";
 
 function AppLayout({ children }) {
   return (
@@ -103,6 +109,54 @@ function App() {
           element={
             <AppLayout>
               <Dashboard />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/password"
+          element={
+            <AppLayout>
+              <PasswordFind />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/service-introduction"
+          element={
+            <AppLayout>
+              <ServiceIntroduction />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/service-method"
+          element={
+            <AppLayout>
+              <ServiceMethod />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/ensuring-stability"
+          element={
+            <AppLayout>
+              <EnsuringStability />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/inquiry"
+          element={
+            <AppLayout>
+              <Inquiry />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/question"
+          element={
+            <AppLayout>
+              <Question />
             </AppLayout>
           }
         />

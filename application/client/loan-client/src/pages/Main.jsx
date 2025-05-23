@@ -21,11 +21,11 @@ const Main = () => {
         </div>
 
         <div className="hidden md:flex space-x-6 text-sm">
-          <NavLink to="#" className="text-gray-700 hover:text-blue-500">서비스 소개</NavLink>
-          <NavLink to="#" className="text-gray-700 hover:text-blue-500">서비스 방법</NavLink>
-          <NavLink to="#" className="text-gray-700 hover:text-blue-500">안전성 보장</NavLink>
-          <NavLink to="#" className="text-gray-700 hover:text-blue-500">자주 묻는 질문</NavLink>
-          <NavLink to="#" className="text-gray-700 hover:text-blue-500">문의하기</NavLink>
+          <NavLink to="/service-introduction" className="text-gray-700 hover:text-blue-500">서비스 소개</NavLink>
+          <NavLink to="/service-method" className="text-gray-700 hover:text-blue-500">서비스 방법</NavLink>
+          <NavLink to="/ensuring-stability" className="text-gray-700 hover:text-blue-500">안전성 보장</NavLink>
+          <NavLink to="/question" className="text-gray-700 hover:text-blue-500">자주 묻는 질문</NavLink>
+          <NavLink to="/inquiry" className="text-gray-700 hover:text-blue-500">문의하기</NavLink>
         </div>
 
         <div className="flex space-x-3">
