@@ -16,10 +16,11 @@ import avatar from "../assets/avatar.png";
 const Nav = () => {
   const location = useLocation();
 
-  // 메인 페이지에서는 Nav 숨김 처리
-  if (location.pathname === "/") {
+  // Nav 숨김 처리
+  if (location.pathname === "/" || location.pathname === "/login" || location.pathname === "/service-intro" || location.pathname === "/signup" || location.pathname === "/question" || location.pathname === "/service-method" || location.pathname === "/inquiry" || location.pathname === "/ensuring-stability") {
     return null;
   }
+
 
   const navItems = [
     { label: "대시보드", icon: <HomeIcon className="w-5 h-5" />, path: "/dashboard" },
