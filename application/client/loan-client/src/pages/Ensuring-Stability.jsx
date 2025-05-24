@@ -29,7 +29,7 @@ const EnsuringStability = () => {
           </li>
         </ul>
         <div className="flex flex-col md:flex-row justify-center gap-4">
-          <NavLink to="/service-introduction" className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition text-center">서비스 소개</NavLink>
+          <NavLink to="/service-intro" className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition text-center">서비스 소개</NavLink>
           <NavLink to="/service-method" className="bg-gray-100 text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition text-center">서비스 방법</NavLink>
         </div>
       </div>

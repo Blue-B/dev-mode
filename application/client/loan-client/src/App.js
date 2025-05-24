@@ -12,7 +12,7 @@ import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import PasswordFind from "./pages/PassWord";
-import ServiceIntroduction from "./pages/Service-Introduction";
+import ServiceIntro from "./pages/ServiceIntro";
 import ServiceMethod from "./pages/Service-Method";
 import Inquiry from "./pages/Inquiry";
 import Question from "./pages/Question";
@@ -121,12 +121,8 @@ function App() {
           }
         />
         <Route
-          path="/service-introduction"
-          element={
-            <AppLayout>
-              <ServiceIntroduction />
-            </AppLayout>
-          }
+          path="/service-intro"
+          element={<ServiceIntro />}
         />
         <Route
           path="/service-method"

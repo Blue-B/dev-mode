@@ -1,5 +1,5 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 
 // 환경변수 또는 실제 발급받은 키로 대체하세요
@@ -9,16 +9,77 @@ const supabase = createClient(
 );
 
 const Login = () => {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+  const [loading, setLoading] = useState(false);
+
   // 구글 로그인 핸들러
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/dashboard", // 로그인 후 이동할 경로
-      },
-    });
-    if (error) {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + "/signup",
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // 구글 로그인 성공 후 프로필 정보 확인
+      if (data?.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile) {
+          // 프로필이 이미 있으면 대시보드로 이동
+          navigate("/dashboard");
+        } else {
+          // 프로필이 없으면 회원가입 페이지로 이동
+          navigate("/signup", { 
+            state: { 
+              email: data.user.email,
+              name: data.user.user_metadata.full_name,
+              profile_image: data.user.user_metadata.avatar_url
+            } 
+          });
+        }
+      }
+    } catch (error) {
       alert("구글 로그인 실패: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 이메일/비밀번호 로그인 핸들러
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) throw error;
+
+      // 로그인 성공 시 대시보드로 이동
+      navigate("/dashboard");
+    } catch (error) {
+      alert("로그인 실패: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -29,8 +90,9 @@ const Login = () => {
         <p className="text-base text-gray-500 mb-7">블록체인 기반 대출 시스템</p>
 
         <button
-          className="w-full bg-gray-100 border border-gray-300 rounded-full py-3 mb-7 flex items-center justify-center hover:bg-gray-200 text-lg"
+          className="w-full bg-gray-100 border border-gray-300 rounded-full py-3 mb-7 flex items-center justify-center hover:bg-gray-200 text-lg disabled:opacity-50"
           onClick={handleGoogleLogin}
+          disabled={loading}
         >
           <svg className="w-6 h-6 mr-2" viewBox="0 0 533.5 544.3">
             <path fill="#4285f4" d="M533.5 278.4c0-17.4-1.4-34.3-4.1-50.6H272v95.8h146.9c-6.3 33.9-25 62.6-53.4 81.9v68.1h86.4c50.5-46.5 81.6-115.2 81.6-195.2z"/>
@@ -38,16 +100,19 @@ const Login = () => {
             <path fill="#fbbc04" d="M120.5 324.9c-10.3-30.2-10.3-62.6 0-92.8v-69.9h-89.3c-39.2 77.8-39.2 169.9 0 247.7l89.3-69.9z"/>
             <path fill="#ea4335" d="M272 107.7c39.6 0 75.1 13.6 103.1 40.3l77.2-77.2c-48.4-44.9-112.5-70.8-180.3-70.8-104.9 0-196.3 61.1-240.8 149.4l89.3 69.9c21.3-64 81-111.6 151.5-111.6z"/>
           </svg>
-          구글로 계속하기
+          {loading ? "로그인 중..." : "구글로 계속하기"}
         </button>
 
-        <form className="space-y-5">
+        <form className="space-y-5" onSubmit={handleEmailLogin}>
           <div className="text-left">
             <label className="block text-base font-medium mb-1">Email</label>
             <input
               type="email"
               placeholder="Email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="w-full px-5 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-base"
+              required
             />
           </div>
           <div className="text-left">
@@ -55,7 +120,10 @@ const Login = () => {
             <input
               type="password"
               placeholder="Password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="w-full px-5 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-base"
+              required
             />
           </div>
           <div className="text-right text-sm">
@@ -63,9 +131,10 @@ const Login = () => {
           </div>
           <button
             type="submit"
-            className="w-full bg-blue-500 text-white py-3 rounded-full text-base hover:bg-blue-600"
+            className="w-full bg-blue-500 text-white py-3 rounded-full text-base hover:bg-blue-600 disabled:opacity-50"
+            disabled={loading}
           >
-            로그인
+            {loading ? "로그인 중..." : "로그인"}
           </button>
         </form>
 
