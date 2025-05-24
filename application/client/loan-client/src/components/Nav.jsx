@@ -23,10 +23,11 @@ const Nav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 메인 페이지에서는 Nav 숨김 처리
-  if (location.pathname === "/") {
+  // Nav 숨김 처리
+  if (location.pathname === "/" || location.pathname === "/login" || location.pathname === "/service-intro" || location.pathname === "/signup" || location.pathname === "/question" || location.pathname === "/service-method" || location.pathname === "/inquiry" || location.pathname === "/ensuring-stability") {
     return null;
   }
+
 
   const handleLogout = async () => {
     try {
@@ -38,6 +39,7 @@ const Nav = () => {
       alert('로그아웃 중 오류가 발생했습니다.');
     }
   };
+
 
   const navItems = [
     { label: "대시보드", icon: <HomeIcon className="w-5 h-5" />, path: "/dashboard" },
