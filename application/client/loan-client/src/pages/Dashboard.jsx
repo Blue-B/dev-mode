@@ -12,15 +12,15 @@ const Dashboard = () => {
     const [loans, setLoans] = useState([]);
     const [wallets, setWallets] = useState([]);
     const [newLoan, setNewLoan] = useState({
-        lender: '',
-        borrower: '',
-        amount: 0,
-        durationDays: 0,
-        interestRate: 0,
+        lender: '', // 대출자 지갑 주소
+        borrower: '', // 차임자 지갑 주소
+        amount: 0, //대출 금액
+        durationDays: 0, //상환 기간
+        interestRate: 0, //이자율
         endDateTimestamp: null // 상환일
 
     });
-    const [selectedMonths, setSelectedMonths] = useState(0);
+    const [selectedMonths, setSelectedMonths] = useState(0); // 상환 기간 
     const [calculatedEndDate, setCalculatedEndDate] = useState(null);
 
     // 지갑 생성
@@ -69,11 +69,11 @@ const Dashboard = () => {
         const completeLoan = {
             ...newLoan,
             id,
-            durationDays,
-            endDateTimestamp
+            durationDays, // 상환 기간
+            endDateTimestamp //만기일 타임스탬프
         };
 
-        await createLoan(completeLoan);
+        await createLoan(completeLoan); // API호출
         alert('대출 요청이 생성되었습니다!');
         fetchLoans();
         setNewLoan({ lender: '', borrower: '', amount: 0, durationDays: 0, interestRate: 0, endDateTimestamp: null });
@@ -140,7 +140,7 @@ const Dashboard = () => {
         }
     };
 
-    useEffect(() => {
+    useEffect(() => { //대출 생성,승인,거절시 데이터 갱신
         fetchLoans();
     }, []);
 
