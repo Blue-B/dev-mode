@@ -10,16 +10,34 @@ import {
   QuestionMarkCircleIcon,
   ArrowRightOnRectangleIcon
 } from "@heroicons/react/24/solid";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import avatar from "../assets/avatar.png";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://nujgcyryhvogafapepyn.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY"
+);
 
 const Nav = () => {
+  const navigate = useNavigate();
   const location = useLocation();
 
   // 메인 페이지에서는 Nav 숨김 처리
   if (location.pathname === "/") {
     return null;
   }
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      navigate('/');
+    } catch (error) {
+      console.error('로그아웃 에러:', error);
+      alert('로그아웃 중 오류가 발생했습니다.');
+    }
+  };
 
   const navItems = [
     { label: "대시보드", icon: <HomeIcon className="w-5 h-5" />, path: "/dashboard" },
@@ -80,7 +98,10 @@ const Nav = () => {
             <QuestionMarkCircleIcon className="w-5 h-5" />
             Help
           </button>
-          <button className="flex items-center gap-3 px-3 py-2 text-sm text-red-500 rounded-md hover:bg-red-50 transition">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 text-sm text-red-500 rounded-md hover:bg-red-50 transition"
+          >
             <ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500" />
             로그 아웃
           </button>

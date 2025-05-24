@@ -15,38 +15,42 @@ const Signup = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    birthNumber: '',
-    gender: '',
-    phone: '',
     email: '',
     password: '',
+    confirmPassword: '',
+    phone: '',
     address: '',
-    profile_image: ''
+    detailAddress: '',
+    birthDate: '',
+    gender: '',
+    terms: false
   });
+
+  const [errors, setErrors] = useState({});
 
   // 구글 로그인으로부터 전달받은 정보 처리
   useEffect(() => {
     const initializeFormData = async () => {
       try {
+        // 현재 로그인된 사용자 정보 가져오기
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         
         if (userError) throw userError;
 
         if (user) {
+          console.log('현재 로그인된 사용자:', user);
           setIsGoogleUser(true);
           setFormData(prev => ({
             ...prev,
-            email: user.email || '',
-            profile_image: user.user_metadata.avatar_url || ''
+            email: user.email,
+            phone: user.user_metadata?.phone || '',
+            address: user.user_metadata?.address || '',
+            birthDate: user.user_metadata?.birthdate || '',
+            gender: user.user_metadata?.gender || '',
+            terms: user.user_metadata?.terms || false
           }));
-        } else if (location.state) {
-          setIsGoogleUser(true);
-          setFormData(prev => ({
-            ...prev,
-            email: location.state.email || '',
-            profile_image: location.state.profile_image || ''
-          }));
+          // 구글 사용자는 이메일/비밀번호 단계 건너뛰기
+          setCurrentStep(3);
         }
       } catch (error) {
         console.error('사용자 정보 초기화 에러:', error);
@@ -54,7 +58,7 @@ const Signup = () => {
     };
 
     initializeFormData();
-  }, [location.state]);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -65,11 +69,73 @@ const Signup = () => {
   };
 
   const handleNext = () => {
-    setCurrentStep(prev => prev + 1);
+    // 현재 단계에 따른 유효성 검사
+    const newErrors = {};
+
+    switch (currentStep) {
+      case 1: // 이메일 입력 단계
+        if (!isGoogleUser) {
+          if (!formData.email) {
+            newErrors.email = '이메일을 입력해주세요';
+          } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)) {
+            newErrors.email = '올바른 이메일 형식이 아닙니다';
+          }
+        }
+        break;
+
+      case 2: // 비밀번호 설정 단계
+        if (!isGoogleUser) {
+          if (!formData.password) {
+            newErrors.password = '비밀번호를 입력해주세요';
+          } else if (formData.password.length < 8) {
+            newErrors.password = '비밀번호는 8자 이상이어야 합니다';
+          }
+
+          if (!formData.confirmPassword) {
+            newErrors.confirmPassword = '비밀번호 확인을 입력해주세요';
+          } else if (formData.password !== formData.confirmPassword) {
+            newErrors.confirmPassword = '비밀번호가 일치하지 않습니다';
+          }
+        }
+        break;
+
+      case 3: // 생년월일과 성별 단계
+        if (!formData.birthDate) {
+          newErrors.birthDate = '생년월일을 입력해주세요';
+        }
+        if (!formData.gender) {
+          newErrors.gender = '성별을 선택해주세요';
+        }
+        break;
+
+      case 4: // 연락처와 주소 단계
+        if (!formData.phone) {
+          newErrors.phone = '전화번호를 입력해주세요';
+        }
+        if (!formData.address) {
+          newErrors.address = '주소를 입력해주세요';
+        }
+        break;
+    }
+
+    setErrors(newErrors);
+
+    // 에러가 없으면 다음 단계로 진행
+    if (Object.keys(newErrors).length === 0) {
+      setCurrentStep(prev => prev + 1);
+    }
   };
 
   const handleBack = () => {
     setCurrentStep(prev => prev - 1);
+  };
+
+  // 생년월일 포맷팅 함수 추가
+  const formatBirthNumber = (birthDate) => {
+    if (!birthDate) return '';
+    // YYYY-MM-DD 형식에서 YYMMDD 형식으로 변환
+    const [year, month, day] = birthDate.split('-');
+    return `${year.slice(2)}${month}${day}`;
   };
 
   const handleSubmit = async (e) => {
@@ -82,55 +148,146 @@ const Signup = () => {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: {
+              name: formData.email.split('@')[0],
+              birth_number: formatBirthNumber(formData.birthDate),
+              gender: formData.gender,
+              phone: formData.phone,
+              address: formData.address
+            }
+          }
         });
 
         if (authError) throw authError;
 
         if (authData.user) {
+          // 프로필 바로 생성
           const { error: profileError } = await supabase
             .from('profiles')
             .insert([
               {
                 id: authData.user.id,
-                name: formData.name,
-                birth_number: formData.birthNumber,
+                name: formData.email.split('@')[0],
+                birth_number: formatBirthNumber(formData.birthDate),
                 gender: formData.gender,
                 phone: formData.phone,
                 address: formData.address,
-              },
+                email: formData.email
+              }
             ]);
 
           if (profileError) throw profileError;
+
+          // 회원가입 완료 후 바로 로그인
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password
+          });
+
+          if (signInError) throw signInError;
+
+          navigate('/dashboard');
         }
       } else {
         // 구글 로그인 사용자 프로필 업데이트
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
 
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: user.id,
-              name: formData.name,
-              birth_number: formData.birthNumber,
-              gender: formData.gender,
-              phone: formData.phone,
-              address: formData.address,
-              profile_image: formData.profile_image
-            },
-          ]);
+        if (user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert([
+              {
+                id: user.id,
+                name: formData.email.split('@')[0],
+                birth_number: formatBirthNumber(formData.birthDate),
+                gender: formData.gender,
+                phone: formData.phone,
+                address: formData.address,
+                email: formData.email
+              }
+            ], {
+              onConflict: 'id'
+            });
 
-        if (profileError) throw profileError;
+          if (profileError) throw profileError;
+          navigate('/dashboard');
+        }
       }
-
-      navigate('/dashboard');
     } catch (error) {
       console.error('회원가입 에러:', error);
-      alert('회원가입 중 오류가 발생했습니다.');
+      if (error.message.includes('Email not confirmed')) {
+        alert('이메일 확인이 필요합니다. 이메일을 확인해주세요.');
+      } else if (error.message.includes('Email address')) {
+        alert('유효하지 않은 이메일 주소입니다.');
+      } else if (error.code === '42501') {
+        alert('권한이 없습니다. 다시 로그인해주세요.');
+      } else {
+        alert('회원가입 중 오류가 발생했습니다.');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.email) {
+      newErrors.email = '이메일을 입력해주세요';
+    } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)) {
+      newErrors.email = '올바른 이메일 형식이 아닙니다';
+    }
+
+    if (!formData.password) {
+      newErrors.password = '비밀번호를 입력해주세요';
+    } else if (formData.password.length < 8) {
+      newErrors.password = '비밀번호는 8자 이상이어야 합니다';
+    }
+
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = '비밀번호 확인을 입력해주세요';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = '비밀번호가 일치하지 않습니다';
+    }
+
+    if (!formData.phone) {
+      newErrors.phone = '전화번호를 입력해주세요';
+    }
+
+    if (!formData.address) {
+      newErrors.address = '주소를 입력해주세요';
+    }
+
+    if (!formData.birthDate) {
+      newErrors.birthDate = '생년월일을 입력해주세요';
+    }
+
+    if (!formData.gender) {
+      newErrors.gender = '성별을 선택해주세요';
+    }
+
+    if (!formData.terms) {
+      newErrors.terms = '이용약관에 동의해주세요';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // 전화번호 포맷팅 함수 추가
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return '';
+    // 숫자만 추출
+    const cleaned = phone.replace(/\D/g, '');
+    // 010-0000-0000 형식으로 변환
+    const match = cleaned.match(/^(\d{3})(\d{4})(\d{4})$/);
+    if (match) {
+      return `${match[1]}-${match[2]}-${match[3]}`;
+    }
+    return phone;
   };
 
   const renderStep = () => {
@@ -162,7 +319,7 @@ const Signup = () => {
 
     switch (currentStep) {
       case 1:
-        return (
+        return !isGoogleUser ? (
           <motion.div
             key="step1"
             variants={pageVariants}
@@ -171,40 +328,19 @@ const Signup = () => {
             exit="exit"
             className="text-center"
           >
-            <h2 className="text-2xl font-bold mb-6">기본 정보를 입력해주세요</h2>
+            <h2 className="text-2xl font-bold mb-8">이메일을 입력해주세요</h2>
             <div className="space-y-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <label className="block text-left text-gray-600 mb-1">이름</label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
                 <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="홍길동"
-                  required
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="example@email.com"
                 />
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <label className="block text-left text-gray-600 mb-1">생년월일</label>
-                <input
-                  type="text"
-                  name="birthNumber"
-                  value={formData.birthNumber}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="YYYYMMDD"
-                  required
-                />
-              </motion.div>
+                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+              </div>
             </div>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -220,10 +356,10 @@ const Signup = () => {
               </button>
             </motion.div>
           </motion.div>
-        );
+        ) : null;
 
       case 2:
-        return (
+        return !isGoogleUser ? (
           <motion.div
             key="step2"
             variants={pageVariants}
@@ -232,12 +368,80 @@ const Signup = () => {
             exit="exit"
             className="text-center"
           >
-            <h2 className="text-2xl font-bold mb-6">성별과 전화번호를 입력해주세요</h2>
+            <h2 className="text-2xl font-bold mb-8">비밀번호를 설정해주세요</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="비밀번호를 입력하세요"
+                />
+                {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
+                <input
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="비밀번호를 다시 입력하세요"
+                />
+                {errors.confirmPassword && <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>}
+              </div>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8"
+            >
+              <button
+                onClick={handleNext}
+                className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
+              >
+                다음
+              </button>
+            </motion.div>
+          </motion.div>
+        ) : null;
+
+      case 3:
+        return (
+          <motion.div
+            key="step3"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="text-center"
+          >
+            <h2 className="text-2xl font-bold mb-6">생년월일과 성별을 입력해주세요</h2>
             <div className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
+              >
+                <label className="block text-left text-gray-600 mb-1">생년월일</label>
+                <input
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+                {errors.birthDate && <p className="text-red-500 text-sm mt-1">{errors.birthDate}</p>}
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
               >
                 <label className="block text-left text-gray-600 mb-2">성별</label>
                 <div className="flex justify-center gap-4">
@@ -264,70 +468,13 @@ const Signup = () => {
                     여성
                   </button>
                 </div>
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <label className="block text-left text-gray-600 mb-1">전화번호</label>
-              <input
-                type="tel"
-                name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="01012345678"
-                  required
-                />
+                {errors.gender && <p className="text-red-500 text-sm mt-1">{errors.gender}</p>}
               </motion.div>
             </div>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-8"
-            >
-              <button
-                onClick={handleNext}
-                className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
-              >
-                다음
-              </button>
-            </motion.div>
-          </motion.div>
-        );
-
-      case 3:
-        return (
-          <motion.div
-            key="step3"
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="text-center"
-          >
-            <h2 className="text-2xl font-bold mb-6">주소를 입력해주세요</h2>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="서울시 강남구"
-                required
-              />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
               className="mt-8"
             >
               <button
@@ -350,6 +497,68 @@ const Signup = () => {
             exit="exit"
             className="text-center"
           >
+            <h2 className="text-2xl font-bold mb-6">연락처와 주소를 입력해주세요</h2>
+            <div className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <label className="block text-left text-gray-600 mb-1">전화번호</label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="01012345678"
+                  required
+                />
+                {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <label className="block text-left text-gray-600 mb-1">주소</label>
+                <input
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="서울시 강남구"
+                  required
+                />
+                {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
+              </motion.div>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8"
+            >
+              <button
+                onClick={handleNext}
+                className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
+              >
+                다음
+              </button>
+            </motion.div>
+          </motion.div>
+        );
+
+      case 5:
+        return (
+          <motion.div
+            key="step5"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="text-center"
+          >
             <h2 className="text-2xl font-bold mb-6">입력하신 정보를 확인해주세요</h2>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -358,12 +567,12 @@ const Signup = () => {
               className="bg-gray-50 rounded-xl p-6 space-y-4 text-left"
             >
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">이름</span>
-                <span className="font-medium">{formData.name}</span>
+                <span className="text-gray-600">이메일</span>
+                <span className="font-medium">{formData.email}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">생년월일</span>
-                <span className="font-medium">{formData.birthNumber}</span>
+                <span className="font-medium">{formData.birthDate}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">성별</span>
@@ -371,18 +580,12 @@ const Signup = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">전화번호</span>
-                <span className="font-medium">{formData.phone}</span>
+                <span className="font-medium">{formatPhoneNumber(formData.phone)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">주소</span>
                 <span className="font-medium">{formData.address}</span>
-            </div>
-              {isGoogleUser && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">이메일</span>
-                  <span className="font-medium">{formData.email}</span>
-            </div>
-              )}
+              </div>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -404,8 +607,8 @@ const Signup = () => {
                   disabled={loading}
                 >
                   {loading ? '처리 중...' : '가입하기'}
-            </button>
-        </div>
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         );
