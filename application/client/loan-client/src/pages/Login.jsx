@@ -23,7 +23,7 @@ const Login = () => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin + "/signup",
+          redirectTo: `${window.location.origin}/signup`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -33,31 +33,11 @@ const Login = () => {
 
       if (error) throw error;
 
-      // 구글 로그인 성공 후 프로필 정보 확인
-      if (data?.user) {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .single();
-
-        if (profile) {
-          // 프로필이 이미 있으면 대시보드로 이동
-          navigate("/dashboard");
-        } else {
-          // 프로필이 없으면 회원가입 페이지로 이동
-          navigate("/signup", { 
-            state: { 
-              email: data.user.email,
-              name: data.user.user_metadata.full_name,
-              profile_image: data.user.user_metadata.avatar_url
-            } 
-          });
-        }
-      }
+      // OAuth 리다이렉트가 발생하므로 여기서는 아무것도 하지 않음
+      // 리다이렉트 후 Signup 페이지에서 처리
     } catch (error) {
+      console.error("구글 로그인 에러:", error);
       alert("구글 로그인 실패: " + error.message);
-    } finally {
       setLoading(false);
     }
   };
