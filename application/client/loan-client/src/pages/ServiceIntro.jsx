@@ -45,7 +45,7 @@ const ServiceIntro = () => {
               스마트계약을 통해 24시간 이내 송금이 이루어집니다.
             </p>
             <NavLink
-              to="/signup"
+              to="/login"
               className="bg-white text-blue-600 px-8 py-3 rounded-full font-semibold hover:bg-blue-50 transition duration-200 inline-block"
             >
               지금 시작하기
@@ -150,10 +150,10 @@ const ServiceIntro = () => {
           </p>
           <div className="flex flex-col md:flex-row justify-center gap-4">
             <NavLink
-              to="/signup"
+              to="/login"
               className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
             >
-              회원가입
+              로그인
             </NavLink>
             <NavLink
               to="/service-method"
