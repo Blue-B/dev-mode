@@ -17,7 +17,7 @@ const Nav = () => {
   const location = useLocation();
 
   // 메인 페이지에서는 Nav 숨김 처리
-  if (location.pathname === "/" || location.pathname === "/login" || location.pathname === "/signup" || location.pathname === "/question" || location.pathname === "/service-method" || location.pathname === "/inquiry") {
+  if (location.pathname === "/") {
     return null;
   }
 

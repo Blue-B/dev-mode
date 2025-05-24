@@ -1,8 +1,29 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { FaUsers, FaBolt, FaShieldAlt, FaChartLine } from "react-icons/fa";
+import { motion } from "framer-motion";
+import FAQItem from "../components/FAQItem";
 
 const ServiceIntro = () => {
+  const faqItems = [
+    {
+      question: "간부대출은 어떤 서비스인가요?",
+      answer: "간부대출은 블록체인 기술을 활용한 P2P 대출 플랫폼으로, 지인 기반의 안전한 대출 서비스를 제공합니다."
+    },
+    {
+      question: "대출 신청은 어떻게 하나요?",
+      answer: "회원가입 후 대시보드에서 대출 신청 버튼을 클릭하여 필요한 정보를 입력하면 됩니다. 심사는 24시간 이내에 완료됩니다."
+    },
+    {
+      question: "수수료는 얼마인가요?",
+      answer: "기존 대출 중개 서비스 대비 90% 이상 저렴한 수수료를 제공합니다. 정확한 수수료는 대출 금액과 기간에 따라 다르게 적용됩니다."
+    },
+    {
+      question: "안전한가요?",
+      answer: "네, 블록체인 기반의 스마트 컨트랙트를 통해 모든 거래가 투명하게 기록되며, 지인 기반의 보증 시스템으로 안전성을 보장합니다."
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navbar */}
@@ -45,7 +66,7 @@ const ServiceIntro = () => {
               스마트계약을 통해 24시간 이내 송금이 이루어집니다.
             </p>
             <NavLink
-              to="/login"
+              to="/signup"
               className="bg-white text-blue-600 px-8 py-3 rounded-full font-semibold hover:bg-blue-50 transition duration-200 inline-block"
             >
               지금 시작하기
@@ -150,10 +171,10 @@ const ServiceIntro = () => {
           </p>
           <div className="flex flex-col md:flex-row justify-center gap-4">
             <NavLink
-              to="/login"
+              to="/signup"
               className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
             >
-              로그인
+              회원가입
             </NavLink>
             <NavLink
               to="/service-method"
@@ -164,6 +185,74 @@ const ServiceIntro = () => {
           </div>
         </div>
       </section>
+
+      {/* FAQ Section */}
+      <div className="mb-16">
+        <motion.h2 
+          className="text-2xl font-bold text-center mb-10"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          자주 묻는 질문
+        </motion.h2>
+        
+        <div className="space-y-4 max-w-3xl mx-auto">
+          {faqItems.map((item, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1, duration: 0.5 }}
+            >
+              <FAQItem
+                question={item.question}
+                answer={item.answer}
+              />
+            </motion.div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Footer */}
+      <footer className="bg-gray-50 py-12 mt-12">
+        <div className="container mx-auto px-4 md:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div>
+              <h4 className="font-semibold mb-4">깐부 대출</h4>
+              <p className="text-sm text-gray-600">안전하고 빠른 P2P 대출 플랫폼</p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-4">서비스</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li><NavLink to="#" className="hover:text-blue-500">대출 신청</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">홈 이용</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">이용 안내</NavLink></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-4">고객센터</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li><NavLink to="#" className="hover:text-blue-500">자주 묻는 질문</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">1:1 문의</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">공지사항</NavLink></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-4">회사 정보</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li><NavLink to="#" className="hover:text-blue-500">회사 소개</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">이용약관</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">개인정보처리방침</NavLink></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

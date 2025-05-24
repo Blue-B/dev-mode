@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import Navbar from "./components/Nav";
 import MyPage from "./pages/MyPage";
@@ -19,11 +19,14 @@ import Question from "./pages/Question";
 import EnsuringStability from "./pages/Ensuring-Stability";
 
 function AppLayout({ children }) {
+  const location = useLocation();
+  const hideNavPaths = ['/signup', '/login', '/password'];
+
   return (
     <div className="flex flex-col h-screen">
       <Header />
       <div className="flex flex-1 overflow-hidden">
-        <Navbar />
+        {!hideNavPaths.includes(location.pathname) && <Navbar />}
         <div className="flex-1 overflow-y-auto">
           {children}
         </div>
@@ -37,13 +40,7 @@ function App() {
     <Router>
       <Routes>
         {/* Main 페이지는 AppLayout 없이 바로 렌더링 */}
-        <Route path="/" element={
-          <AppLayout>
-            <Main />
-          </AppLayout>
-          
-          
-          } />
+        <Route path="/" element={<Main />} />
 
         {/* MyPage만 AppLayout 안에 렌더링 */}
         <Route
