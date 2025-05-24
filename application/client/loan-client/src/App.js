@@ -37,7 +37,13 @@ function App() {
     <Router>
       <Routes>
         {/* Main 페이지는 AppLayout 없이 바로 렌더링 */}
-        <Route path="/" element={<Main />} />
+        <Route path="/" element={
+          <AppLayout>
+            <Main />
+          </AppLayout>
+          
+          
+          } />
 
         {/* MyPage만 AppLayout 안에 렌더링 */}
         <Route

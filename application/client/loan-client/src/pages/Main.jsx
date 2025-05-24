@@ -10,7 +10,7 @@ const Main = () => {
   return (
     <div className="min-h-screen flex flex-col font-sans">
       {/* Navbar */}
-      <nav className="bg-white py-3 px-4 md:px-8 flex justify-between items-center">
+      {/* <nav className="bg-white py-3 px-4 md:px-8 flex justify-between items-center">
         <div className="flex items-center">
           <NavLink to="/">
             <div className="text-lg font-bold flex items-center cursor-pointer">
@@ -35,7 +35,7 @@ const Main = () => {
             </button>
           </NavLink>
         </div>
-      </nav>
+      </nav> */}
 
       {/* Hero Section */}
       <section className="relative text-white py-24 bg-[url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')] bg-cover bg-center">
