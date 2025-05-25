@@ -40,6 +40,25 @@ const Signup = () => {
         if (user) {
           console.log('현재 로그인된 사용자:', user);
           setIsGoogleUser(true);
+
+          // 이미 DB에 프로필이 존재하는지 확인
+          const { data: existingProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            throw profileError;
+          }
+
+          if (existingProfile) {
+            // 이미 가입된 사용자: 추가 입력 없이 대시보드로 이동
+            navigate('/dashboard');
+            return;
+          }
+
+          // 프로필 없으면 → 폼 초기값 설정 후 Step3부터 시작
           setFormData(prev => ({
             ...prev,
             email: user.email,
