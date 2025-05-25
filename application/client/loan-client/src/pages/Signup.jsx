@@ -200,6 +200,7 @@ const Signup = () => {
           if (profileError) throw profileError;
 
           // 회원가입 완료 후 바로 로그인
+          // localStorage에 access_token, refresh_token, 사용자 정보를 JWT 토큰 형태로 저장하여 로그인 상태를 유지
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password
