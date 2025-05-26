@@ -21,12 +21,6 @@ const supabase = createClient(
 
 const Nav = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // 메인 페이지에서는 Nav 숨김 처리
-  if (location.pathname === "/") {
-    return null;
-  }
 
   const handleLogout = async () => {
     try {
@@ -38,6 +32,7 @@ const Nav = () => {
       alert('로그아웃 중 오류가 발생했습니다.');
     }
   };
+
 
   const navItems = [
     { label: "대시보드", icon: <HomeIcon className="w-5 h-5" />, path: "/dashboard" },
@@ -102,7 +97,9 @@ const Nav = () => {
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2 text-sm text-red-500 rounded-md hover:bg-red-50 transition"
           >
-            <ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500" />
+            <ArrowRightOnRectangleIcon 
+              onClick={handleLogout}
+            className="w-5 h-5 text-red-500" />
             로그 아웃
           </button>
         </div>

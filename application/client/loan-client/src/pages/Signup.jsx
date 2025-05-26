@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { createWallet, getWalletBalance } from '../services/api';
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,6 +41,25 @@ const Signup = () => {
         if (user) {
           console.log('현재 로그인된 사용자:', user);
           setIsGoogleUser(true);
+
+          // 이미 DB에 프로필이 존재하는지 확인
+          const { data: existingProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            throw profileError;
+          }
+
+          if (existingProfile) {
+            // 이미 가입된 사용자: 추가 입력 없이 대시보드로 이동
+            navigate('/dashboard');
+            return;
+          }
+
+          // 프로필 없으면 → 폼 초기값 설정 후 Step3부터 시작
           setFormData(prev => ({
             ...prev,
             email: user.email,
@@ -181,6 +201,7 @@ const Signup = () => {
           if (profileError) throw profileError;
 
           // 회원가입 완료 후 바로 로그인
+          // localStorage에 access_token, refresh_token, 사용자 정보를 JWT 토큰 형태로 저장하여 로그인 상태를 유지
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password
@@ -230,6 +251,18 @@ const Signup = () => {
     } finally {
       setLoading(false);
     }
+
+    // 회원가입 후 자동으로 지갑 생성
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw userError || new Error("사용자 정보 없음");
+
+      // 지갑 자동 생성 요청 (userId만 넘김)
+      await createWallet(user.id);
+    } catch (error) {
+      console.error("지갑 자동 생성 실패:", error.message || error);
+    }
+
   };
 
   const validateForm = () => {

@@ -20,7 +20,7 @@ import EnsuringStability from "./pages/Ensuring-Stability";
 
 function AppLayout({ children }) {
   const location = useLocation();
-  const hideNavPaths = ['/signup', '/login', '/password'];
+  const hideNavPaths = ["/", "/login", "/signup", "/password", "/service-intro", "/question", "/service-method", "/inquiry", "/ensuring-stability"];
 
   return (
     <div className="flex flex-col h-screen">
@@ -39,8 +39,11 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Main 페이지는 AppLayout 없이 바로 렌더링 */}
-        <Route path="/" element={<Main />} />
+        <Route path="/" element={
+          <AppLayout>
+            <Main />
+          </AppLayout>
+          } />
 
         {/* MyPage만 AppLayout 안에 렌더링 */}
         <Route
@@ -125,7 +128,11 @@ function App() {
         />
         <Route
           path="/service-intro"
-          element={<ServiceIntro />}
+          element={
+          <AppLayout>
+            <ServiceIntro />
+          </AppLayout>
+          }
         />
         <Route
           path="/service-method"

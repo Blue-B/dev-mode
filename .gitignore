@@ -31,3 +31,4 @@ explorer/wallet/
 .DS_Store
 *.log
 .env
+/home/ubuntu/go/src/dev-mode/application/rest/.env

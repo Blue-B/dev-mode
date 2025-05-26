@@ -26,34 +26,7 @@ const ServiceIntro = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navbar */}
-      <nav className="bg-white py-3 px-4 md:px-8 flex justify-between items-center">
-        <div className="flex items-center">
-          <NavLink to="/">
-            <div className="text-lg font-bold flex items-center cursor-pointer">
-              <span className="text-black mr-1">◆</span>
-              <span>깐부 대출</span>
-            </div>
-          </NavLink>
-        </div>
-
-        <div className="hidden md:flex space-x-6 text-sm">
-          <NavLink to="/service-intro" className="text-gray-700 hover:text-blue-500">서비스 소개</NavLink>
-          <NavLink to="/service-method" className="text-gray-700 hover:text-blue-500">서비스 방법</NavLink>
-          <NavLink to="/ensuring-stability" className="text-gray-700 hover:text-blue-500">안전성 보장</NavLink>
-          <NavLink to="/question" className="text-gray-700 hover:text-blue-500">자주 묻는 질문</NavLink>
-          <NavLink to="/inquiry" className="text-gray-700 hover:text-blue-500">문의하기</NavLink>
-        </div>
-
-        <div className="flex space-x-3">
-          <NavLink to="/login">
-            <button className="bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-medium">
-              로그인
-            </button>
-          </NavLink>
-        </div>
-      </nav>
-
+ 
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-20">
         <div className="container mx-auto px-4">
@@ -66,7 +39,7 @@ const ServiceIntro = () => {
               스마트계약을 통해 24시간 이내 송금이 이루어집니다.
             </p>
             <NavLink
-              to="/signup"
+              to="/login"
               className="bg-white text-blue-600 px-8 py-3 rounded-full font-semibold hover:bg-blue-50 transition duration-200 inline-block"
             >
               지금 시작하기
@@ -171,10 +144,10 @@ const ServiceIntro = () => {
           </p>
           <div className="flex flex-col md:flex-row justify-center gap-4">
             <NavLink
-              to="/signup"
+              to="/login"
               className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
             >
-              회원가입
+              로그인/회원가입
             </NavLink>
             <NavLink
               to="/service-method"
