@@ -1,63 +1,47 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
-
-// 환경변수 또는 실제 발급받은 키로 대체하세요
-const supabase = createClient(
-  "https://nujgcyryhvogafapepyn.supabase.co", // Supabase URL
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY" // Supabase public anon key
-);
+import { useAuth } from "../contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { signIn, signInWithGoogle } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [loading, setLoading] = useState(false);
 
-  // 구글 로그인 핸들러
-  const handleGoogleLogin = async () => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/signup`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-
+      const { error } = await signIn(formData.email, formData.password);
       if (error) throw error;
-
-      // OAuth 리다이렉트가 발생하므로 여기서는 아무것도 하지 않음
-      // 리다이렉트 후 Signup 페이지에서 처리
+      navigate("/dashboard");
     } catch (error) {
-      console.error("구글 로그인 에러:", error);
-      alert("구글 로그인 실패: " + error.message);
+      alert("로그인 실패: " + error.message);
+    } finally {
       setLoading(false);
     }
   };
 
   // 이메일/비밀번호 로그인 핸들러
-  const handleEmailLogin = async (e) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-
+      const { error } = await signInWithGoogle();
       if (error) throw error;
-
-      // 로그인 성공 시 대시보드로 이동
-      navigate("/dashboard");
+      // 구글 로그인 성공 후 리다이렉트는 AuthContext에서 자동으로 처리됨
     } catch (error) {
-      alert("로그인 실패: " + error.message);
+      alert("구글 로그인 실패: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -89,8 +73,9 @@ const Login = () => {
             <input
               type="email"
               placeholder="Email"
+              name="email"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={handleChange}
               className="w-full px-5 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-base"
               required
             />
@@ -100,8 +85,9 @@ const Login = () => {
             <input
               type="password"
               placeholder="Password"
+              name="password"
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              onChange={handleChange}
               className="w-full px-5 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-base"
               required
             />
