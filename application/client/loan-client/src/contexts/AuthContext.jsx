@@ -46,7 +46,16 @@ export const AuthProvider = ({ children }) => {
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signUp: (email, password) => supabase.auth.signUp({ email, password }),
     signOut: () => supabase.auth.signOut(),
-    signInWithGoogle: () => supabase.auth.signInWithOAuth({ provider: 'google' }),
+    signInWithGoogle: () => supabase.auth.signInWithOAuth({ 
+      provider: 'google',
+      options: {
+        redirectTo: 'http://localhost:8001/signup',  // 서버 포트로 변경
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    }),
   };
 
   return (
