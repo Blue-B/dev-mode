@@ -1,11 +1,12 @@
 // src/components/Header.jsx
+import { useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 const Header = () => {
   const location = useLocation();
   const isPublicPage = ["/", "/login", "/signup", "/service-intro","/question", "/service-method", "/inquiry", "/ensuring-stability"].includes(location.pathname);
 
-  return (
+  return ( 
     <header className="bg-white border-b border-gray-200 py-3 px-4 md:px-8 flex justify-between items-center">
       {/* 좌측 로고 */}
       <NavLink to="/" className="flex items-center text-lg font-bold text-black hover:opacity-80">

@@ -21,13 +21,6 @@ const supabase = createClient(
 
 const Nav = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Nav 숨김 처리
-  if (location.pathname === "/" || location.pathname === "/login" || location.pathname === "/service-intro" || location.pathname === "/signup" || location.pathname === "/question" || location.pathname === "/service-method" || location.pathname === "/inquiry" || location.pathname === "/ensuring-stability") {
-    return null;
-  }
-
 
   const handleLogout = async () => {
     try {
@@ -104,7 +97,9 @@ const Nav = () => {
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2 text-sm text-red-500 rounded-md hover:bg-red-50 transition"
           >
-            <ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500" />
+            <ArrowRightOnRectangleIcon 
+              onClick={handleLogout}
+            className="w-5 h-5 text-red-500" />
             로그 아웃
           </button>
         </div>

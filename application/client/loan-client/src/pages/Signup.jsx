@@ -40,6 +40,25 @@ const Signup = () => {
         if (user) {
           console.log('현재 로그인된 사용자:', user);
           setIsGoogleUser(true);
+
+          // 이미 DB에 프로필이 존재하는지 확인
+          const { data: existingProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            throw profileError;
+          }
+
+          if (existingProfile) {
+            // 이미 가입된 사용자: 추가 입력 없이 대시보드로 이동
+            navigate('/dashboard');
+            return;
+          }
+
+          // 프로필 없으면 → 폼 초기값 설정 후 Step3부터 시작
           setFormData(prev => ({
             ...prev,
             email: user.email,
@@ -181,6 +200,7 @@ const Signup = () => {
           if (profileError) throw profileError;
 
           // 회원가입 완료 후 바로 로그인
+          // localStorage에 access_token, refresh_token, 사용자 정보를 JWT 토큰 형태로 저장하여 로그인 상태를 유지
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password
