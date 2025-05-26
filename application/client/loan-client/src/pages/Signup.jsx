@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { createWallet, getWalletBalance } from '../services/api';
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -250,6 +251,18 @@ const Signup = () => {
     } finally {
       setLoading(false);
     }
+
+    // 회원가입 후 자동으로 지갑 생성
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw userError || new Error("사용자 정보 없음");
+
+      // 지갑 자동 생성 요청 (userId만 넘김)
+      await createWallet(user.id);
+    } catch (error) {
+      console.error("지갑 자동 생성 실패:", error.message || error);
+    }
+
   };
 
   const validateForm = () => {

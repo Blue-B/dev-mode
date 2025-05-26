@@ -3,16 +3,16 @@ import axios from 'axios';
 const API_BASE_URL = 'http://localhost:8001';
 
 // 지갑 관련 API
-export const createWallet = async (address, initialBalance) => {
-    try {
-        const response = await axios.get(`${API_BASE_URL}/createWallet`, {
-            params: { address, initialBalance }
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+// POST 방식으로 변경
+export const createWallet = async (userId) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/wallet/create`, { userId });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
+
 
 export const getWalletBalance = async (address) => {
     try {
