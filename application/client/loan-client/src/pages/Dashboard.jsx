@@ -28,6 +28,7 @@ const Dashboard = () => {
     const [selectedMonths, setSelectedMonths] = useState(0); // 상환 기간 
     const [calculatedEndDate, setCalculatedEndDate] = useState(null);
     const [friendWallets, setFriendWallets] = useState([]);
+    const [loadingWallet, setLoadingWallet] = useState(true);
 
     const { user } = useAuth();
 
@@ -48,6 +49,8 @@ const Dashboard = () => {
             }
             } catch (err) {
                 console.error('🔍 지갑 주소 조회 실패:', err.message);
+            } finally {
+                setLoadingWallet(false);
             }
         };
 
@@ -66,37 +69,51 @@ const Dashboard = () => {
     }, [walletAddress]);
 
 
-   useEffect(() => {
-    const fetchFriendWallets = async () => {
-        if (!user?.id) return;
+    useEffect(() => {
+        const fetchFriendWallets = async () => {
+            if (!user?.id) return;
 
-        const { data: friendProfiles, error } = await supabase
-        .from('friends')
-        .select(`
-            profiles:friend_user_id (
-            id,
-            email,
-            name,
-            wallet_id
-            )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'accepted');
+            // 1. 내가 보낸 요청 + 받은 요청 모두 조회
+            const { data: sent, error: sentError } = await supabase
+            .from('friends')
+            .select('friend_user_id')
+            .eq('user_id', user.id)
+            .eq('status', 'accepted');
 
-        if (error) {
-        console.error('친구 프로필 조인 쿼리 실패:', error);
-        return;
-        }
+            const { data: received, error: receivedError } = await supabase
+            .from('friends')
+            .select('user_id')
+            .eq('friend_user_id', user.id)
+            .eq('status', 'accepted');
 
-        const friendInfoList = friendProfiles
-        .map(f => f.profiles)
-        .filter(p => p?.wallet_id); // 지갑이 있는 친구만
+            if (sentError || receivedError) {
+            console.error('친구 목록 조회 실패:', sentError || receivedError);
+            return;
+            }
 
-        setFriendWallets(friendInfoList);
-    };
+            // 2. 상대방 ID 목록 합치기
+            const friendIds = [
+            ...sent.map(f => f.friend_user_id),
+            ...received.map(f => f.user_id),
+            ];
 
-    fetchFriendWallets();
+            // 3. 상대방 프로필에서 지갑 포함 조회
+            const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, name, email, wallet_id')
+            .in('id', friendIds);
+
+            if (profileError) {
+            console.error('친구 프로필 조회 실패:', profileError);
+            return;
+            }
+
+            setFriendWallets(profiles.filter(p => p.wallet_id));
+        };
+
+        fetchFriendWallets();
     }, [user?.id]);
+
 
 
 
@@ -209,6 +226,16 @@ const Dashboard = () => {
         fetchLoans();
     }, []);
 
+    if (loadingWallet || !walletAddress) {
+        return (
+            <div className="flex items-center justify-center h-[60vh]">
+            <p className="text-gray-500 text-lg">🪙 지갑을 불러오는 중입니다. 잠시만 기다려주세요...</p>
+            </div>
+        );
+    }
+
+
+
     return (
         <div className="bg-white text-gray-800 p-10 text-[17px]">
             {/* 상단 카드 */}
@@ -248,18 +275,23 @@ const Dashboard = () => {
                     />
 
                     {/* borrower는 친구 목록 기반 옵션만 표시 */}
-                    <select
-                    value={newLoan.borrower}
-                    onChange={(e) => setNewLoan({ ...newLoan, borrower: e.target.value })}
-                    className="border px-4 py-3 rounded-lg w-full text-lg"
-                    >
+                   <select
+                        value={newLoan.borrower}
+                        onChange={(e) => setNewLoan({ ...newLoan, borrower: e.target.value })}
+                        className="border px-4 py-3 rounded-lg w-full text-lg"
+                        >
                         <option value="">차입자 선택</option>
-                        {friendWallets.map((friend) => (
+                        {friendWallets.length > 0 ? (
+                            friendWallets.map((friend) => (
                             <option key={friend.id} value={friend.wallet_id}>
-                            {friend.name || '이름없음'} ({friend.email})
-                        </option>
-                        ))}
-                    </select>
+                                {friend.name || '이름없음'} ({friend.email})
+                            </option>
+                            ))
+                        ) : (
+                            <option disabled>⚠ 지갑이 있는 친구가 없습니다</option>
+                        )}
+                        </select>
+
 
 
                     <div className="flex items-center border rounded-lg px-4 py-3">
