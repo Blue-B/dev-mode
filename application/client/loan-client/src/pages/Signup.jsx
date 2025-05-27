@@ -5,9 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from 'framer-motion';
 
 const supabase = createClient(
-  "https://nujgcyryhvogafapepyn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY"
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
 );
+
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -162,6 +163,8 @@ const Signup = () => {
     e.preventDefault();
     setLoading(true);
 
+    let userId;
+
     try {
       if (!isGoogleUser) {
         // 일반 회원가입
@@ -181,62 +184,68 @@ const Signup = () => {
         });
 
         if (authError) throw authError;
+        userId = authData.user.id;
 
-        if (authData.user) {
-          // 프로필 바로 생성
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([
-              {
-                id: authData.user.id,
-                name: formData.email.split('@')[0],
-                birth_number: formatBirthNumber(formData.birthDate),
-                gender: formData.gender,
-                phone: formData.phone,
-                address: formData.address,
-                email: formData.email
-              }
-            ]);
+        // 프로필 바로 생성
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: authData.user.id,
+              name: formData.email.split('@')[0],
+              birth_number: formatBirthNumber(formData.birthDate),
+              gender: formData.gender,
+              phone: formData.phone,
+              address: formData.address,
+              email: formData.email
+            }
+          ]);
 
-          if (profileError) throw profileError;
+        if (profileError) throw profileError;
 
-          // 회원가입 완료 후 바로 로그인
-          // localStorage에 access_token, refresh_token, 사용자 정보를 JWT 토큰 형태로 저장하여 로그인 상태를 유지
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password
-          });
+        // 로그인 처리
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password
+        });
 
-          if (signInError) throw signInError;
-
-          navigate('/dashboard');
-        }
+        if (signInError) throw signInError;
       } else {
-        // 구글 로그인 사용자 프로필 업데이트
+        // 구글 로그인 사용자
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
+        userId = user.id;
 
-        if (user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert([
-              {
-                id: user.id,
-                name: formData.email.split('@')[0],
-                birth_number: formatBirthNumber(formData.birthDate),
-                gender: formData.gender,
-                phone: formData.phone,
-                address: formData.address,
-                email: formData.email
-              }
-            ], {
-              onConflict: 'id'
-            });
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert([
+            {
+              id: user.id,
+              name: formData.email.split('@')[0],
+              birth_number: formatBirthNumber(formData.birthDate),
+              gender: formData.gender,
+              phone: formData.phone,
+              address: formData.address,
+              email: formData.email
+            }
+          ], {
+            onConflict: 'id'
+          });
 
-          if (profileError) throw profileError;
-          navigate('/dashboard');
-        }
+        if (profileError) throw profileError;
       }
+
+      // 공통: 지갑 생성 요청
+      try {
+        console.log("지갑 생성 시도:", userId);
+        await createWallet(userId);
+        console.log("✅ 지갑 생성 완료");
+      } catch (walletError) {
+        console.error("지갑 자동 생성 실패:", walletError.message || walletError);
+      }
+
+      navigate('/dashboard');
+
     } catch (error) {
       console.error('회원가입 에러:', error);
       if (error.message.includes('Email not confirmed')) {
@@ -251,19 +260,8 @@ const Signup = () => {
     } finally {
       setLoading(false);
     }
-
-    // 회원가입 후 자동으로 지갑 생성
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) throw userError || new Error("사용자 정보 없음");
-
-      // 지갑 자동 생성 요청 (userId만 넘김)
-      await createWallet(user.id);
-    } catch (error) {
-      console.error("지갑 자동 생성 실패:", error.message || error);
-    }
-
   };
+
 
   const validateForm = () => {
     const newErrors = {};
