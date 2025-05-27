@@ -25,13 +25,6 @@ console.log("✅ SERVICE_ROLE_KEY 시작:", process.env.SUPABASE_SERVICE_ROLE_KE
 // CORS 설정 추가
 app.use(cors());  // 기본적으로 모든 origin 허용
 
-// app.use((req, res, next) => {
-//     res.header('Access-Control-Allow-Origin', '*');
-//     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-//     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-//     next();
-// });
-
 // body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
