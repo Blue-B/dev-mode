@@ -98,6 +98,10 @@ app.get('/chain/createWallet', function (req, res) {
 // 지갑 잔액 조회
 app.get('/getWalletBalance', function (req, res) {
     let { address } = req.query;
+    
+    console.log("📦 잔액 조회 요청 address:", address);  
+    if (!address) return res.status(400).json({ error: '주소가 필요합니다.' });
+
     let args = [address];
     sdk.send(true, 'GetWalletBalance', args, res);
 });
