@@ -6,6 +6,7 @@ const API_BASE_URL = 'http://localhost:8001';
 // POST 방식으로 변경
 export const createWallet = async (userId) => {
   try {
+     console.log("api.js Sending wallet create request", userId);
     const response = await axios.post(`${API_BASE_URL}/wallet/create`, { userId });
     return response.data;
   } catch (error) {
