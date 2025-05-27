@@ -3,6 +3,8 @@
 'use strict';
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
+const axios = require('axios');
 require('dotenv').config();  // .env에서 SUPABASE 설정 불러오기
 
 const express = require('express');
@@ -19,15 +21,48 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY  // // 이게 anon이면 안 됨
 );
 
+// Resend 클라이언트 초기화
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 console.log("✅ SUPABASE_URL:", process.env.SUPABASE_URL);
 console.log("✅ SERVICE_ROLE_KEY 시작:", process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-20, -1));
 
 // CORS 설정 추가
-app.use(cors());  // 기본적으로 모든 origin 허용
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:8001', 'http://127.0.0.1:3000', 'http://127.0.0.1:8001'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
 
 // body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 인증 미들웨어
+const authenticateUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: '인증이 필요합니다.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: '유효하지 않은 토큰입니다.' });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('인증 에러:', error);
+    res.status(500).json({ error: '인증 처리 중 오류가 발생했습니다.' });
+  }
+};
 
 // ================= 지갑 API ==================
 
@@ -58,7 +93,6 @@ app.post('/wallet/create', async (req, res) => {
 
   // 3. 체인코드 호출을 중간 경유 라우트로 전송 (res 직접 넘기지 않음)
   // => /chain/createWallet?address=wallet_xxx&initialBalance=1000000
-  const axios = require('axios');
   try {
     const chainResponse = await axios.get(`http://localhost:8001/chain/createWallet`, {
       params: {
@@ -146,13 +180,93 @@ app.get('/queryAllLoans', function (req, res) {
 
 // ================= 정적 파일 서비스 및 React 라우팅 ==================
 
-const clientPath = path.join(__dirname, '../client');
+// React 앱의 정적 파일 서빙
+const clientPath = path.join(__dirname, '../client/loan-client/build');
 app.use(express.static(clientPath));
+
+// API 라우트는 정적 파일 서빙 전에 정의
+app.post('/api/inquiry', authenticateUser, async (req, res) => {
+  try {
+    const { name, email, message, captchaToken } = req.body;
+
+    // 필수 필드 검증
+    if (!name || !email || !message || !captchaToken) {
+      return res.status(400).json({ error: '모든 필드를 입력해주세요.' });
+    }
+
+    // reCAPTCHA 검증
+    const isValidCaptcha = await verifyRecaptcha(captchaToken);
+    if (!isValidCaptcha) {
+      return res.status(400).json({ error: '캡챠 인증에 실패했습니다.' });
+    }
+
+    // Supabase에 문의 저장
+    const { error: dbError } = await supabase
+      .from('inquiries')
+      .insert([
+        {
+          name,
+          email,
+          message,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }
+      ]);
+
+    if (dbError) {
+      console.error('Supabase 에러:', dbError);
+      throw new Error('데이터베이스 저장 중 오류가 발생했습니다.');
+    }
+
+    // 자동 응답 이메일 전송
+    try {
+      await resend.emails.send({
+        from: '깐부대출 <noreply@fitend.com>',
+        to: email,
+        subject: '문의가 접수되었습니다',
+        html: `
+          <h2>문의 접수 확인</h2>
+          <p>안녕하세요, ${name}님</p>
+          <p>문의하신 내용이 성공적으로 접수되었습니다.</p>
+          <p>문의 내용을 검토한 후, 가능한 경우 답변 드리도록 하겠습니다.</p>
+          <p>문의 내용:</p>
+          <p>${message}</p>
+          <p>감사합니다.</p>
+          <p>깐부대출 드림</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('이메일 전송 에러:', emailError);
+      // 이메일 전송 실패는 전체 프로세스를 실패시키지 않음
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('문의하기 에러:', error);
+    res.status(500).json({ error: error.message || '문의 접수 중 오류가 발생했습니다.' });
+  }
+});
 
 // 마지막에만 index.html 반환 (SPA 대응용)
 app.get('*', function (req, res) {
-    res.sendFile(path.join(clientPath, 'index.html'));
+  res.sendFile(path.join(clientPath, 'index.html'));
 });
+
+// reCAPTCHA 검증 함수
+async function verifyRecaptcha(token) {
+  try {
+    const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+      params: {
+        secret: process.env.RECAPTCHA_SECRET_KEY,
+        response: token
+      }
+    });
+    return response.data.success;
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error);
+    return false;
+  }
+}
 
 // 서버 시작
 app.listen(PORT, HOST);
