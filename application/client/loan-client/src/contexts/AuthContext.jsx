@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { createWallet } from '../services/api'; 
 
 const supabase = createClient(
-  "https://nujgcyryhvogafapepyn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY"
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
 const AuthContext = createContext({});
@@ -39,6 +40,36 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, []);
+
+   // user가 로그인되면 wallet 존재 여부 확인 후 생성
+  useEffect(() => {
+    const ensureWallet = async () => {
+      if (!user?.id) return;
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('wallet_id')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('❌ wallet 조회 실패:', error);
+        return;
+      }
+
+      if (!profile?.wallet_id) {
+        console.log('🧾 wallet_id 없음, 자동 생성 시작:', user.id);
+        try {
+          await createWallet(user.id);
+          console.log('✅ wallet 생성 완료');
+        } catch (err) {
+          console.error('❌ wallet 생성 실패:', err.message);
+        }
+      }
+    };
+
+    ensureWallet();
+  }, [user?.id]); // user가 바뀔 때마다 실행됨
 
   const value = {
     user,
