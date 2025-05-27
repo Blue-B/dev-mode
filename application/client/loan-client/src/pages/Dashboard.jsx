@@ -47,7 +47,7 @@ const Dashboard = () => {
                 setWalletAddress(data.wallet_id); // 지갑 주소 설정
             }
             } catch (err) {
-            console.error('🔍 지갑 주소 조회 실패:', err.message);
+                console.error('🔍 지갑 주소 조회 실패:', err.message);
             }
         };
 
@@ -66,40 +66,39 @@ const Dashboard = () => {
     }, [walletAddress]);
 
 
-    useEffect(() => {
-  const fetchFriendWallets = async () => {
-    if (!user?.id) return;
+   useEffect(() => {
+    const fetchFriendWallets = async () => {
+        if (!user?.id) return;
 
-    // 1. 친구 ID 리스트 가져오기
-    const { data: friendRelations, error } = await supabase
-      .from('friends')
-      .select('friend_id')
-      .eq('user_id', user.id); // 또는 상호 관계면 or 조건 필요
+        const { data: friendProfiles, error } = await supabase
+        .from('friends')
+        .select(`
+            profiles:friend_user_id (
+            id,
+            email,
+            name,
+            wallet_id
+            )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'accepted');
 
-    if (error) {
-      console.error('친구 목록 불러오기 실패:', error);
-      return;
-    }
+        if (error) {
+        console.error('친구 프로필 조인 쿼리 실패:', error);
+        return;
+        }
 
-    const friendIds = friendRelations.map(rel => rel.friend_id);
+        const friendInfoList = friendProfiles
+        .map(f => f.profiles)
+        .filter(p => p?.wallet_id); // 지갑이 있는 친구만
 
-    // 2. 친구들의 지갑 주소 가져오기
-    const { data: profiles, error: profileError } = await supabase
-      .from('profiles')
-      .select('wallet_id')
-      .in('id', friendIds);
-
-    if (profileError) {
-      console.error('친구 프로필 조회 실패:', profileError);
-      return;
-    }
-
-    const wallets = profiles.map(p => p.wallet_id).filter(Boolean);
-        setFriendWallets(wallets);
+        setFriendWallets(friendInfoList);
     };
 
     fetchFriendWallets();
     }, [user?.id]);
+
+
 
     // 잔액 조회
     const fetchBalance = async () => {
@@ -255,8 +254,10 @@ const Dashboard = () => {
                     className="border px-4 py-3 rounded-lg w-full text-lg"
                     >
                         <option value="">차입자 선택</option>
-                        {friendWallets.map((wallet, index) => (
-                            <option key={index} value={wallet}>{wallet}</option>
+                        {friendWallets.map((friend) => (
+                            <option key={friend.id} value={friend.wallet_id}>
+                            {friend.name || '이름없음'} ({friend.email})
+                        </option>
                         ))}
                     </select>
 

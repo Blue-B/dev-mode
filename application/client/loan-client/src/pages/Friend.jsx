@@ -3,17 +3,10 @@ import { UserPlusIcon } from '@heroicons/react/24/solid';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/solid';
 import { createClient } from "@supabase/supabase-js";
 
-// 환경변수 또는 실제 발급받은 키로 대체하세요
 const supabase = createClient(
-  "https://nujgcyryhvogafapepyn.supabase.co", // Supabase URL
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51amdjeXJ5aHZvZ2FmYXBlcHluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTg0NTgsImV4cCI6MjA2MzM3NDQ1OH0.PMN8j92B3UngKfIwj9Gp5hq9TnsyF6Nv_SBhm3T3JAY" // Supabase public anon key
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
 );
-
-
-
-
-
-
 
 function Friend() {
   //친구추가용
