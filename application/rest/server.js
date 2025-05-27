@@ -42,46 +42,65 @@ app.use(express.urlencoded({ extended: true }));
 app.post('/wallet/create', async (req, res) => {
   const { userId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
-  }
-
-  // 기존 지갑 여부 확인
+  // 1. 기존 지갑 확인
   const { data: existing, error: checkError } = await supabase
     .from('profiles')
     .select('wallet_id')
     .eq('id', userId)
     .single();
 
-  if (checkError) {
-    console.error('🔴 Supabase 조회 실패:', checkError);
-    return res.status(500).json({ error: 'Failed to check wallet' });
-  }
+  if (checkError) return res.status(500).json({ error: '지갑 조회 실패' });
+  if (existing?.wallet_id) return res.status(200).json({ message: '기존 지갑 존재', wallet: existing.wallet_id });
 
-  if (existing?.wallet_id) {
-    return res.status(200).json({ message: 'Wallet already exists', wallet: existing.wallet_id });
-  }
-
-  // 새 지갑 주소 생성
+  // 2. 지갑 ID 생성 및 Supabase 업데이트
   const walletId = `wallet_${userId.slice(0, 8)}_${Date.now()}`;
   const initialBalance = '1000000';
 
-  // Supabase에 wallet_id 먼저 업데이트
   const { error: updateError } = await supabase
     .from('profiles')
     .update({ wallet_id: walletId })
     .eq('id', userId);
 
-  if (updateError) {
-    console.error('🔴 Supabase 업데이트 실패:', updateError);
-    return res.status(500).json({ error: 'Failed to update Supabase' });
-  }
+  if (updateError) return res.status(500).json({ error: 'wallet_id 업데이트 실패' });
 
-  // sdk에 res 직접 넘김 (sdk.js 수정 없이 처리)
-  const args = [walletId, initialBalance];
-  sdk.send(false, 'CreateWallet', args, res);
+  // 3. 체인코드 호출을 중간 경유 라우트로 전송 (res 직접 넘기지 않음)
+  // => /chain/createWallet?address=wallet_xxx&initialBalance=1000000
+  const axios = require('axios');
+  try {
+    const chainResponse = await axios.get(`http://localhost:8001/chain/createWallet`, {
+      params: {
+        address: walletId,
+        initialBalance,
+      },
+    });
+
+    if (chainResponse.data !== 'Success') {
+      return res.status(500).json({ error: '블록체인 지갑 생성 실패' });
+    }
+
+    // 4. 트랜잭션 기록
+    const { error: txError } = await supabase.from('wallet_transactions').insert([
+      {
+        user_id: userId,
+        type: 'deposit',
+        amount: parseFloat(initialBalance),
+        memo: '초기 입금 (지갑 생성)',
+      },
+    ]);
+
+    if (txError) return res.status(500).json({ error: '트랜잭션 기록 실패' });
+
+    return res.status(200).json({ message: '지갑 생성 완료', wallet: walletId });
+  } catch (err) {
+    return res.status(500).json({ error: '체인코드 호출 실패', detail: err.message });
+  }
 });
 
+app.get('/chain/createWallet', function (req, res) {
+  let { address, initialBalance } = req.query;
+  let args = [address, initialBalance || "0"];
+  sdk.send(false, 'CreateWallet', args, res);
+});
 
 // 지갑 잔액 조회
 app.get('/getWalletBalance', function (req, res) {
