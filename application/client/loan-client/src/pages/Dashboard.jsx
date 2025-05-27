@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { createWallet, getWalletBalance, createLoan, queryAllLoans, approveLoan, denyLoan } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '../contexts/AuthContext';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 // 1개월 ~ 60개월까지 반복 생성
 const durationOptions = Array.from({ length: 60 }, (_, i) => i + 1);
 
 const Dashboard = () => {
     const [walletAddress, setWalletAddress] = useState('');
-    const [initialBalance, setInitialBalance] = useState('0');
     const [balance, setBalance] = useState(0);
     const [loans, setLoans] = useState([]);
-    const [wallets, setWallets] = useState([]);
     const [newLoan, setNewLoan] = useState({
         lender: '', // 대출자 지갑 주소
         borrower: '', // 차임자 지갑 주소
@@ -22,18 +27,79 @@ const Dashboard = () => {
     });
     const [selectedMonths, setSelectedMonths] = useState(0); // 상환 기간 
     const [calculatedEndDate, setCalculatedEndDate] = useState(null);
+    const [friendWallets, setFriendWallets] = useState([]);
 
-    // 지갑 생성
-    const handleCreateWallet = async () => {
-        try {
-            await createWallet(walletAddress, initialBalance);
-            alert('지갑이 생성되었습니다!');
-            setWallets([...wallets, walletAddress]);
-            fetchBalance();
-        } catch (error) {
-            alert('지갑 생성 실패: ' + error.message);
-        }
+    const { user } = useAuth();
+
+    // 로그인한 사용자 잔액 가져오기
+    useEffect(() => {
+        const fetchWalletFromProfile = async () => {
+            if (!user?.id) return;
+            try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('wallet_id')
+                .eq('id', user.id)
+                .single();
+
+            if (error) throw error;
+            if (data?.wallet_id) {
+                setWalletAddress(data.wallet_id); // 지갑 주소 설정
+            }
+            } catch (err) {
+            console.error('🔍 지갑 주소 조회 실패:', err.message);
+            }
+        };
+
+        fetchWalletFromProfile();
+    }, [user?.id]);
+
+    // walletAddress가 설정되었을 때 잔액 조회
+    useEffect(() => {
+    if (walletAddress) {
+        setNewLoan(prev => ({
+            ...prev,
+            lender: walletAddress,
+        }));
+        fetchBalance();
+    }
+    }, [walletAddress]);
+
+
+    useEffect(() => {
+  const fetchFriendWallets = async () => {
+    if (!user?.id) return;
+
+    // 1. 친구 ID 리스트 가져오기
+    const { data: friendRelations, error } = await supabase
+      .from('friends')
+      .select('friend_id')
+      .eq('user_id', user.id); // 또는 상호 관계면 or 조건 필요
+
+    if (error) {
+      console.error('친구 목록 불러오기 실패:', error);
+      return;
+    }
+
+    const friendIds = friendRelations.map(rel => rel.friend_id);
+
+    // 2. 친구들의 지갑 주소 가져오기
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('wallet_id')
+      .in('id', friendIds);
+
+    if (profileError) {
+      console.error('친구 프로필 조회 실패:', profileError);
+      return;
+    }
+
+    const wallets = profiles.map(p => p.wallet_id).filter(Boolean);
+        setFriendWallets(wallets);
     };
+
+    fetchFriendWallets();
+    }, [user?.id]);
 
     // 잔액 조회
     const fetchBalance = async () => {
@@ -49,7 +115,7 @@ const Dashboard = () => {
     // 대출 요청 생성
     const handleCreateLoan = async () => {
         try {
-        const { lender, borrower, amount, interestRate } = newLoan;
+            const { lender, borrower, amount, interestRate } = newLoan;
 
         if (!lender || !borrower || !amount || !selectedMonths || !interestRate) {
             alert('모든 필드를 입력해주세요.');
@@ -169,87 +235,32 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            {/* 지갑 관리 섹션 */}
-            <div className="p-8 border rounded-xl mb-12">
-                <h2 className="text-xl font-semibold mb-6">지갑 관리</h2>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center border rounded-lg px-4 py-3">
-                        <input
-                            type="text"
-                            value={walletAddress}
-                            onChange={(e) => setWalletAddress(e.target.value)}
-                            placeholder="지갑 주소 입력"
-                            className="flex-grow outline-none placeholder-gray-400 text-lg"
-                        />
-                    </div>
-                    <div className="flex items-center border rounded-lg px-4 py-3">
-                        <input
-                            type="number"
-                            value={initialBalance}
-                            onChange={(e) => setInitialBalance(e.target.value)}
-                            placeholder="초기 잔액"
-                            className="flex-grow outline-none placeholder-gray-400 text-lg"
-                        />
-                        <span className="text-gray-400 ml-2">KRW</span>
-                    </div>
-                </div>
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button
-                        onClick={handleCreateWallet}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg"
-                    >
-                        지갑 생성
-                    </button>
-                    <button
-                        onClick={fetchBalance}
-                        className="border px-6 py-2 rounded-lg"
-                    >
-                        잔액 조회
-                    </button>
-                </div>
-                {wallets.length > 0 && (
-                    <div className="mt-4">
-                        <h3 className="font-semibold mb-2">생성된 지갑 목록:</h3>
-                        <ul className="list-disc list-inside">
-                            {wallets.map((wallet, index) => (
-                                <li 
-                                    key={index}
-                                    className="cursor-pointer hover:text-blue-500"
-                                    onClick={() => setWalletAddress(wallet)}
-                                >
-                                    {wallet}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-
             {/* 대출 요청 섹션 */}
             <div className="p-8 border rounded-xl mb-12">
                 <h2 className="text-xl font-semibold mb-6">새 대출 요청</h2>
                 <div className="grid grid-cols-2 gap-6">
                
+                    { /*lender는 고정값 (선택 불가 input으로 표시) */}
+                    <input
+                        type="text"
+                        value={walletAddress} // 로그인한 사용자의 지갑 주소
+                        disabled
+                        className="border px-4 py-3 rounded-lg w-full text-lg bg-gray-100 text-gray-500"
+                    />
+
+                    {/* borrower는 친구 목록 기반 옵션만 표시 */}
                     <select
-                        value={newLoan.lender}
-                        onChange={(e) => setNewLoan({...newLoan, lender: e.target.value})}
-                        className="border px-4 py-3 rounded-lg w-full text-lg"
-                    >
-                        <option value="">대출자 선택</option>
-                        {wallets.map((wallet, index) => (
-                            <option key={index} value={wallet}>{wallet}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={newLoan.borrower}
-                        onChange={(e) => setNewLoan({...newLoan, borrower: e.target.value})}
-                        className="border px-4 py-3 rounded-lg w-full text-lg"
+                    value={newLoan.borrower}
+                    onChange={(e) => setNewLoan({ ...newLoan, borrower: e.target.value })}
+                    className="border px-4 py-3 rounded-lg w-full text-lg"
                     >
                         <option value="">차입자 선택</option>
-                        {wallets.map((wallet, index) => (
+                        {friendWallets.map((wallet, index) => (
                             <option key={index} value={wallet}>{wallet}</option>
                         ))}
                     </select>
+
+
                     <div className="flex items-center border rounded-lg px-4 py-3">
                         <input
                             type="number"
