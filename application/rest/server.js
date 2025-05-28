@@ -151,31 +151,66 @@ app.post('/wallet/create', async (req, res) => {
   }
 });
 
-app.get('/chain/createWallet', function (req, res) {
+// app.get('/chain/createWallet', function (req, res) {
+//   let { address, initialBalance } = req.query;
+//   let args = [address, initialBalance || "0"];
+//   sdk.send(false, 'CreateWallet', args, res);
+// });
+app.get('/chain/createWallet', async function (req, res) {
   let { address, initialBalance } = req.query;
   let args = [address, initialBalance || "0"];
-  sdk.send(false, 'CreateWallet', args, res);
+
+  try {
+    const result = await sdk.send(false, 'CreateWallet', args);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// 지갑 잔액 조회
-app.get('/getWalletBalance', function (req, res) {
-    let { address } = req.query;
-    
-    console.log("📦 잔액 조회 요청 address:", address);  
-    if (!address) return res.status(400).json({ error: '주소가 필요합니다.' });
 
-    let args = [address];
-    sdk.send(true, 'GetWalletBalance', args, res);
+// 지갑 잔액 조회
+// app.get('/getWalletBalance', function (req, res) {
+//     let { address } = req.query;
+    
+//     console.log("📦 잔액 조회 요청 address:", address);  
+//     if (!address) return res.status(400).json({ error: '주소가 필요합니다.' });
+
+//     let args = [address];
+//     sdk.send(true, 'GetWalletBalance', args, res);
+// });
+app.get('/getWalletBalance', async function (req, res) {
+  let { address } = req.query;
+  if (!address) return res.status(400).json({ error: '주소가 필요합니다.' });
+
+  try {
+    const result = await sdk.send(true, 'GetWalletBalance', [address]);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ================= 대출 시스템 API ==================
 
 // 대출 요청 생성
-app.get('/createLoan', function (req, res) {
-    let { id, lender, borrower, amount, durationDays, interestRate } = req.query;
-    let args = [id, lender, borrower, amount, durationDays, interestRate];
-    sdk.send(false, 'CreateLoanRequest', args, res);
+// app.get('/createLoan', function (req, res) {
+//     let { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+//     let args = [id, lender, borrower, amount, durationDays, interestRate];
+//     sdk.send(false, 'CreateLoanRequest', args, res);
+// });
+app.get('/createLoan', async function (req, res) {
+  const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+  const args = [id, lender, borrower, amount, durationDays, interestRate];
+
+  try {
+    const result = await sdk.send(false, 'CreateLoanRequest', args);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
+
 
 // 대출 승인
 app.get('/approveLoan', function (req, res) {
@@ -199,16 +234,149 @@ app.get('/repayLoan', function (req, res) {
 });
 
 // 단일 대출 요청 조회
-app.get('/queryLoan', function (req, res) {
-    let { id } = req.query;
-    let args = [id];
-    sdk.send(true, 'QueryLoanRequest', args, res);
+// app.get('/queryLoan', function (req, res) {
+//     let { id } = req.query;
+//     let args = [id];
+//     sdk.send(true, 'QueryLoanRequest', args, res);
+// });
+app.get('/queryLoan', async function (req, res) {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'Loan ID가 필요합니다.' });
+
+  try {
+    const result = await sdk.send(true, 'QueryLoanRequest', [id]);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
+
 // 전체 대출 요청 조회
-app.get('/queryAllLoans', function (req, res) {
-    sdk.send(true, 'QueryAllLoanRequests', [], res);
+// app.get('/queryAllLoans', function (req, res) {
+//     sdk.send(true, 'QueryAllLoanRequests', [], res);
+// });
+app.get('/queryAllLoans', async (req, res) => {
+  try {
+    const result = await sdk.send(true, 'QueryAllLoanRequests', []);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
+
+
+//= ================= 대출풀 시스템 API ==================
+// 대출풀 생성
+// server.js - createPool
+app.post('/createPool', async (req, res) => {
+  const { id, name, minDeposit, interestRate, durationMonths } = req.body;
+  const args = [id, name, minDeposit.toString(), interestRate.toString(), durationMonths.toString()];
+
+  console.log("📥 풀 생성 요청 받음:", req.body);
+  console.log("📤 체인코드 호출 시작");
+
+  try {
+    const result = await sdk.send(false, 'CreatePool', args);  // ✅ res 넘기지 않음
+    console.log("✅ 체인코드 호출 결과:", result);
+
+    const now = new Date();
+    const end = new Date();
+    end.setMonth(end.getMonth() + parseInt(durationMonths));
+
+    const { error } = await supabase.from('pools').insert({
+      id,
+      name,
+      min_deposit: minDeposit,
+      interest_rate: interestRate,
+      start_time: now.toISOString(),
+      end_time: end.toISOString(),
+      status: 'Open',
+      total_deposit: 0,
+      total_interest: 0,
+    });
+
+    if (error) {
+      console.error('❌ Supabase 저장 오류:', error);
+      return res.status(500).json({ error: 'Supabase 저장 실패', detail: error.message });
+    }
+
+    return res.status(200).json({ message: '풀 생성 완료', poolId: id });
+
+  } catch (err) {
+    console.error('❌ 풀 생성 중 서버 오류:', err);
+    return res.status(500).json({ error: '풀 생성 실패', detail: err.message || '서버 오류 발생' });
+  }
+});
+
+
+
+
+// 대출풀 조회 
+// app.get('/queryPool', function (req, res) {
+//   const { id } = req.query;
+
+//   if (!id) {
+//     return res.status(400).json({ error: 'Missing pool ID' });
+//   }
+
+//   const args = [id];
+//   sdk.send(true, 'QueryPool', args, res);
+// });
+app.get('/queryPool', async function (req, res) {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'Missing pool ID' });
+
+  try {
+    const result = await sdk.send(true, 'QueryPool', [id]);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+// app.get('/queryAllPools', (req, res) => {
+//   sdk.send(true, 'QueryAllPools', [], res); 
+// });
+app.get('/queryAllPools', async (req, res) => {
+  try {
+    const result = await sdk.send(true, 'QueryAllPools', []);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// 대출풀 참여
+// app.post('/joinPool', async (req, res) => {
+//   const { poolID, userAddress, deposit } = req.body;
+
+//   if (!poolID || !userAddress || !deposit) {
+//     return res.status(400).json({ error: 'Missing required fields' });
+//   }
+
+//   const args = [poolID, userAddress, deposit.toString()];
+//   sdk.send(false, 'JoinPool', args, res);
+// });
+app.post('/joinPool', async (req, res) => {
+  const { poolID, userAddress, deposit } = req.body;
+
+  if (!poolID || !userAddress || !deposit) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const result = await sdk.send(false, 'JoinPool', [poolID, userAddress, deposit.toString()]);
+    return res.json({ message: '참여 완료', result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 // ================= 정적 파일 서비스 및 React 라우팅 ==================
 

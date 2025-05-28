@@ -10,51 +10,38 @@ const chaincodeName = 'abstore';
 const walletPath = path.join(process.cwd(), '..', 'wallet');
 const ccpPath = path.resolve(__dirname, '..', 'connection-org1.json');
 const org1UserId = 'appUser';
-async function send(type, func, args, res, result){
-    try {
-        const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
-        const wallet = await Wallets.newFileSystemWallet(walletPath);
-        console.log(`Wallet path: ${walletPath}`);
 
-        const gateway = new Gateway();
+async function send(type, func, args) {
+  try {
+    const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+    const wallet = await Wallets.newFileSystemWallet(walletPath);
+    const gateway = new Gateway();
 
-        try {
-            await gateway.connect(ccp, {
-                wallet,
-                identity: org1UserId,
-                discovery: { enabled: true, asLocalhost: false }
-            });
-            console.log('Success to connect network');
+    await gateway.connect(ccp, {
+      wallet,
+      identity: org1UserId,
+      discovery: { enabled: true, asLocalhost: false },
+    });
 
-            const network = await gateway.getNetwork(channelName);
-            console.log('Success to connect channel1');
-            const contract = network.getContract(chaincodeName);
+    const network = await gateway.getNetwork(channelName);
+    const contract = network.getContract(chaincodeName);
 
-            if(type){
-                result = await contract.evaluateTransaction(func, ...args);
-                try {
-                    // JSON 파싱 시도
-                    const parsedResult = JSON.parse(result.toString());
-                    res.json(parsedResult);
-                } catch (e) {
-                    // JSON 파싱 실패 시 원본 문자열 반환
-                    res.json(result.toString());
-                }
-            } else {
-                result = await contract.submitTransaction(func, ...args);
-                res.json("Success");
-            }
-            
-
-        } catch (error) {
-            res.status(500).send({ error: `${error}`});
-        } finally {
-            gateway.disconnect();
-        }
-    } catch (error) {
-        res.status(500).send({ error: `${error}`});
+    if (type) {
+      const result = await contract.evaluateTransaction(func, ...args);
+      const resultStr = result.toString();
+      try {
+        return JSON.parse(resultStr); // JSON이면 파싱
+      } catch {
+        return resultStr; // 아니면 문자열 그대로 반환
+      }
+    } else {
+      await contract.submitTransaction(func, ...args);
+      return "Success";
     }
+
+  } catch (error) {
+    throw new Error(`send() 오류: ${error.message}`);
+  }
 }
-module.exports = {
-    send:send
-}
+
+module.exports = { send };
