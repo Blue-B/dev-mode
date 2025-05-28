@@ -1,40 +1,16 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-
+import { NavLink } from "react-router-dom";
 import { FaUsers, FaBolt } from "react-icons/fa";
 import mrbannerImage from "../assets/mrbanner.png";
 import mlbannerImage from "../assets/mlbanner.png";
+import Header from "../components/Header";
 
 const Main = () => {
   const [loanAmount, setLoanAmount] = useState("");
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      {/* Navbar */}
-      <nav className="bg-white py-3 px-4 md:px-8 flex justify-between items-center">
-        <div className="flex items-center">
-          <Link href="/">
-            <div className="text-lg font-bold flex items-center cursor-pointer">
-              <span className="text-black mr-1">◆</span>
-              <span>깐부 대출</span>
-            </div>
-          </Link>
-        </div>
-
-        <div className="hidden md:flex space-x-6 text-sm">
-          <a href="#" className="text-gray-700 hover:text-blue-500">서비스 소개</a>
-          <a href="#" className="text-gray-700 hover:text-blue-500">서비스 방법</a>
-          <a href="#" className="text-gray-700 hover:text-blue-500">안전성 보장</a>
-          <a href="#" className="text-gray-700 hover:text-blue-500">자주 묻는 질문</a>
-          <a href="#" className="text-gray-700 hover:text-blue-500">문의하기</a>
-        </div>
-
-        <div className="flex space-x-3">
-          <button className="bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-medium">
-            로그인
-          </button>
-        </div>
-      </nav>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative text-white py-24 bg-[url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')] bg-cover bg-center">
@@ -44,16 +20,19 @@ const Main = () => {
             <h1 className="text-4xl font-bold mb-12 pl-4">투자 기회를 놓치지 마세요!</h1>
 
             <div className="flex flex-col md:flex-row space-y-3 md:space-y-0">
-              <input 
-                type="text" 
-                placeholder="원하는 대출 금액을 입력하세요" 
+              <input
+                type="text"
+                placeholder="원하는 대출 금액을 입력하세요"
                 className="flex-1 px-4 py-3 text-gray-800 border-none outline-none rounded-md md:rounded-r-none"
                 value={loanAmount}
                 onChange={(e) => setLoanAmount(e.target.value)}
               />
-              <button className="bg-blue-500 text-white px-6 py-3 rounded-md md:rounded-l-none whitespace-nowrap font-medium">
-                즉시 대출 신청
-              </button>
+              <NavLink to="/dashboard">
+                <button className="bg-blue-500 text-white px-6 py-3 rounded-md md:rounded-l-none whitespace-nowrap font-medium">
+                  즉시 대출 신청
+                </button>
+              </NavLink>
+              
             </div>
           </div>
         </div>
@@ -104,18 +83,18 @@ const Main = () => {
       <section className="py-10 container mx-auto px-4 md:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <img 
+            <img
               src={mlbannerImage}
-              alt="모바일앱 인터페이스" 
+              alt="모바일앱 인터페이스"
               className="w-full rounded-lg mb-2"
             />
             <p className="text-slate-500 font-medium">모바일로 간편하게 투자 자금 확보</p>
           </div>
 
           <div>
-            <img 
+            <img
               src={mrbannerImage}
-              alt="계약 일러스트" 
+              alt="계약 일러스트"
               className="w-full rounded-lg mb-2"
             />
             <p className="text-slate-500 font-medium">계약 중개 수수료 90% 이상 절감</p>
@@ -135,27 +114,27 @@ const Main = () => {
             <div>
               <h4 className="font-semibold mb-4">서비스</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-500">대출 신청</a></li>
-                <li><a href="#" className="hover:text-blue-500">홈 이용</a></li>
-                <li><a href="#" className="hover:text-blue-500">이용 안내</a></li>
+                <li><NavLink to="#" className="hover:text-blue-500">대출 신청</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">홈 이용</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">이용 안내</NavLink></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold mb-4">고객센터</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-500">자주 묻는 질문</a></li>
-                <li><a href="#" className="hover:text-blue-500">1:1 문의</a></li>
-                <li><a href="#" className="hover:text-blue-500">공지사항</a></li>
+                <li><NavLink to="#" className="hover:text-blue-500">자주 묻는 질문</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">1:1 문의</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">공지사항</NavLink></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold mb-4">회사 정보</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-500">회사 소개</a></li>
-                <li><a href="#" className="hover:text-blue-500">이용약관</a></li>
-                <li><a href="#" className="hover:text-blue-500">개인정보처리방침</a></li>
+                <li><NavLink to="#" className="hover:text-blue-500">회사 소개</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">이용약관</NavLink></li>
+                <li><NavLink to="#" className="hover:text-blue-500">개인정보처리방침</NavLink></li>
               </ul>
             </div>
           </div>
