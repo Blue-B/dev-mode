@@ -55,8 +55,8 @@ const Signup = () => {
           }
 
           if (existingProfile) {
-            // 이미 가입된 사용자: 추가 입력 없이 대시보드로 이동
-            navigate('/dashboard');
+            // 이미 가입된 사용자: 추가 입력 없이 메인 페이지로 이동
+            navigate('/');
             return;
           }
 
@@ -244,7 +244,7 @@ const Signup = () => {
         console.error("지갑 자동 생성 실패:", walletError.message || walletError);
       }
 
-      navigate('/dashboard');
+      navigate('/');
 
     } catch (error) {
       console.error('회원가입 에러:', error);

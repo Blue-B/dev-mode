@@ -55,6 +55,11 @@ function AppLayout({ children }) {
   );
 }
 
+const RedirectToMain = () => {
+  const { user } = useAuth();
+  return user ? <Navigate to="/" replace /> : <Navigate to="/login" replace />;
+};
+
 function App() {
   return (
     // AuthProvider로 전체 앱을 감싸서 인증 상태를 전역적으로 관리
@@ -73,6 +78,16 @@ function App() {
           <Route path="/inquiry" element={<Inquiry />} />
 
           {/* Protected Routes: 로그인한 사용자만 접근 가능한 페이지들 */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>  {/* 로그인 체크 */}
+                <AppLayout>     {/* 기본 레이아웃 적용 */}
+                  <Main /> {/* 실제 페이지 컴포넌트 */}
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard"
             element={

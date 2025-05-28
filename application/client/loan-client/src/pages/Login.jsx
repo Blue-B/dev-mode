@@ -25,7 +25,7 @@ const Login = () => {
       setLoading(true);
       const { error } = await signIn(formData.email, formData.password);
       if (error) throw error;
-      navigate("/dashboard");
+      navigate("/");
     } catch (error) {
       alert("로그인 실패: " + error.message);
     } finally {
