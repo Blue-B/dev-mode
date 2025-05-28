@@ -23,14 +23,14 @@ import Error from "./pages/Error";
 // 보호된 라우트 컴포넌트: 로그인한 사용자만 접근 가능
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();  // AuthContext에서 현재 로그인 상태 가져오기
-  
+
   if (loading) {
     return <div>Loading...</div>;  // 로딩 중일 때 표시
   }
   
-  if (!user) {
-    return <Navigate to="/login" />;  // 로그인 안 되어있으면 로그인 페이지로 강제 이동
-  }
+  // if (!user) {
+  //   return <Navigate to="/login" />;  // 로그인 안 되어있으면 로그인 페이지로 강제 이동
+  // }
   
   return children;  // 로그인 되어있으면 원래 보여줄 컴포넌트 표시
 };
