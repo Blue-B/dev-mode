@@ -37,6 +37,20 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
+// Content-Security-Policy 헤더 추가
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "connect-src 'self' https://*.supabase.co https://www.google.com https://www.gstatic.com; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; " +
+    "frame-src 'self' https://www.google.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:;"
+  );
+  next();
+});
+
 // body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -50,16 +64,30 @@ const authenticateUser = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
+    if (!token) {
       return res.status(401).json({ error: '유효하지 않은 토큰입니다.' });
     }
 
-    req.user = user;
-    next();
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error) {
+        console.error('Supabase 인증 에러:', error);
+        return res.status(401).json({ error: '유효하지 않은 토큰입니다.' });
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: '사용자를 찾을 수 없습니다.' });
+      }
+
+      req.user = user;
+      next();
+    } catch (authError) {
+      console.error('인증 처리 에러:', authError);
+      return res.status(401).json({ error: '인증 처리 중 오류가 발생했습니다.' });
+    }
   } catch (error) {
-    console.error('인증 에러:', error);
+    console.error('인증 미들웨어 에러:', error);
     res.status(500).json({ error: '인증 처리 중 오류가 발생했습니다.' });
   }
 };
@@ -205,7 +233,7 @@ app.post('/api/inquiry', authenticateUser, async (req, res) => {
     }
 
     // Supabase에 문의 저장
-    const { error: dbError } = await supabase
+    const { data, error: dbError } = await supabase
       .from('inquiries')
       .insert([
         {
@@ -215,36 +243,67 @@ app.post('/api/inquiry', authenticateUser, async (req, res) => {
           status: 'pending',
           created_at: new Date().toISOString()
         }
-      ]);
+      ])
+      .select();
 
     if (dbError) {
       console.error('Supabase 에러:', dbError);
       throw new Error('데이터베이스 저장 중 오류가 발생했습니다.');
     }
 
+    console.log('저장된 문의:', data);
+
     // 자동 응답 이메일 전송
     try {
-      await resend.emails.send({
-        from: '깐부대출 <noreply@fitend.com>',
-        to: email,
-        subject: '문의가 접수되었습니다',
-        html: `
-          <h2>문의 접수 확인</h2>
-          <p>안녕하세요, ${name}님</p>
-          <p>문의하신 내용이 성공적으로 접수되었습니다.</p>
-          <p>문의 내용을 검토한 후, 가능한 경우 답변 드리도록 하겠습니다.</p>
-          <p>문의 내용:</p>
-          <p>${message}</p>
-          <p>감사합니다.</p>
-          <p>깐부대출 드림</p>
-        `
-      });
+      // 개발 환경에서는 이메일 전송 로그만 출력
+      if (process.env.NODE_ENV === 'development') {
+        console.log('개발 환경: 이메일 전송 시뮬레이션');
+        console.log('수신자:', email);
+        console.log('제목: 문의가 접수되었습니다');
+        console.log('내용:', `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb; margin-bottom: 20px;">문의 접수 확인</h2>
+            <p style="margin-bottom: 15px;">안녕하세요, ${name}님</p>
+            <p style="margin-bottom: 15px;">문의하신 내용이 성공적으로 접수되었습니다.</p>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+            </div>
+            <p style="margin-bottom: 15px;">문의하신 내용을 검토해보겠습니다. 모든 문의사항에 대해 답변을 드리지 못할 수 있음을 양해 부탁드립니다.</p>
+            <p style="margin-bottom: 15px;">추가 문의사항이 있으시면 언제든지 문의해 주세요.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">이 메일은 발신 전용입니다. 문의사항은 고객센터를 이용해 주세요.</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">고객센터: 1234-5678 (평일 09:00 - 18:00)</p>
+          </div>
+        `);
+      } else {
+        // 프로덕션 환경에서는 실제 이메일 전송
+        await resend.emails.send({
+          from: '깐부대출 <noreply@fitend.com>',
+          to: email,
+          subject: '문의가 접수되었습니다',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2563eb; margin-bottom: 20px;">문의 접수 확인</h2>
+              <p style="margin-bottom: 15px;">안녕하세요, ${name}님</p>
+              <p style="margin-bottom: 15px;">문의하신 내용이 성공적으로 접수되었습니다.</p>
+              <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+              </div>
+              <p style="margin-bottom: 15px;">문의하신 내용을 검토해보겠습니다. 모든 문의사항에 대해 답변을 드리지 못할 수 있음을 양해 부탁드립니다.</p>
+              <p style="margin-bottom: 15px;">추가 문의사항이 있으시면 언제든지 문의해 주세요.</p>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+              <p style="color: #6b7280; font-size: 14px; margin: 0;">이 메일은 발신 전용입니다. 문의사항은 고객센터를 이용해 주세요.</p>
+              <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">고객센터: 1234-5678 (평일 09:00 - 18:00)</p>
+            </div>
+          `
+        });
+      }
     } catch (emailError) {
       console.error('이메일 전송 에러:', emailError);
       // 이메일 전송 실패는 전체 프로세스를 실패시키지 않음
     }
 
-    res.json({ success: true });
+    res.json({ success: true, data });
   } catch (error) {
     console.error('문의하기 에러:', error);
     res.status(500).json({ error: error.message || '문의 접수 중 오류가 발생했습니다.' });
@@ -263,11 +322,26 @@ async function verifyRecaptcha(token) {
       params: {
         secret: process.env.RECAPTCHA_SECRET_KEY,
         response: token
+      },
+      timeout: 5000, // 5초 타임아웃
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     });
-    return response.data.success;
+
+    if (!response.data.success) {
+      console.error('reCAPTCHA 검증 실패:', response.data['error-codes']);
+      return false;
+    }
+
+    return true;
   } catch (error) {
-    console.error('reCAPTCHA verification error:', error);
+    console.error('reCAPTCHA verification error:', error.message);
+    // 네트워크 오류 시에도 true 반환 (개발 환경에서만 ★실제 배포될경우 네트워크 오류시에는 false로 꼭 바꿔야함 꼭!!)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('개발 환경: reCAPTCHA 검증 우회');
+      return true;
+    }
     return false;
   }
 }

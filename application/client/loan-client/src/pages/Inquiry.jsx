@@ -8,12 +8,6 @@ const supabase = createClient(
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
-// 금칙어 목록
-const forbiddenWords = [
-  "시발", "씨발", "개새끼", "병신", "ㅅㅂ", "ㅂㅅ", "ㅄ", "ㅈㄹ", "지랄",
-  "ㄱㄱㄱ", "ㄴㄴㄴ", "ㅋㅋㅋ", "ㅎㅎㅎ", "ㅠㅠㅠ", "ㅜㅜㅜ"
-];
-
 const Inquiry = () => {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
@@ -41,14 +35,9 @@ const Inquiry = () => {
     setError(""); // 입력이 변경될 때마다 에러 메시지 초기화
   };
 
-  // 금칙어 체크 함수
-  const checkForbiddenWords = (text) => {
-    return forbiddenWords.some(word => text.includes(word));
-  };
-
   // 메시지 길이 체크 함수
   const checkMessageLength = (text) => {
-    return text.length >= 20;
+    return text.trim().length >= 20;
   };
 
   const handleSubmit = async (e) => {
@@ -63,12 +52,6 @@ const Inquiry = () => {
         return;
       }
 
-      // 금칙어 체크
-      if (checkForbiddenWords(form.message)) {
-        setError("부적절한 내용이 포함되어 있습니다.");
-        return;
-      }
-
       // reCAPTCHA 검증
       const captchaToken = await recaptchaRef.current.executeAsync();
       if (!captchaToken) {
@@ -76,12 +59,18 @@ const Inquiry = () => {
         return;
       }
 
+      // 세션 확인
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
       // 백엔드 API 호출
       const response = await fetch('http://localhost:8001/api/inquiry', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           ...form,
@@ -97,8 +86,12 @@ const Inquiry = () => {
 
       setSubmitted(true);
     } catch (err) {
-      setError(err.message || "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       console.error('문의하기 에러:', err);
+      if (err.message === '로그인이 필요합니다.') {
+        setError('로그인이 필요합니다. 로그인 후 다시 시도해주세요.');
+      } else {
+        setError(err.message || "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -154,15 +147,18 @@ const Inquiry = () => {
             </div>
             <ReCAPTCHA
               ref={recaptchaRef}
-              sitekey="6LeGuUsrAAAAAOW6C_l7C5OkAskdQ1ANGVb5qiPZ"
+              sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY}
               size="invisible"
+              badge="bottomright"
               onError={(err) => {
                 console.error('reCAPTCHA 에러:', err);
                 setError('캡챠 인증 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+                setIsSubmitting(false);
               }}
               onExpired={() => {
                 console.log('reCAPTCHA 만료됨');
                 setError('캡챠 인증이 만료되었습니다. 다시 시도해주세요.');
+                setIsSubmitting(false);
               }}
             />
             <button
