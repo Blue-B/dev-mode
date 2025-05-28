@@ -18,6 +18,7 @@ import ServiceMethod from "./pages/Service-Method";
 import Inquiry from "./pages/Inquiry";
 import Question from "./pages/Question";
 import EnsuringStability from "./pages/Ensuring-Stability";
+import Error from "./pages/Error";
 
 // 보호된 라우트 컴포넌트: 로그인한 사용자만 접근 가능
 const ProtectedRoute = ({ children }) => {
@@ -142,10 +143,11 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<Error />} />
         </Routes>
       </Router>
     </AuthProvider>
   );
 }
 
-export default App; 
+export default App;
