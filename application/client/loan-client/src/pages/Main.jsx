@@ -3,12 +3,14 @@ import { NavLink } from "react-router-dom";
 import { FaUsers, FaBolt } from "react-icons/fa";
 import mrbannerImage from "../assets/mrbanner.png";
 import mlbannerImage from "../assets/mlbanner.png";
+import Header from "../components/Header";
 
 const Main = () => {
   const [loanAmount, setLoanAmount] = useState("");
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
+      <Header />
 
       {/* Hero Section */}
       <section className="relative text-white py-24 bg-[url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')] bg-cover bg-center">
