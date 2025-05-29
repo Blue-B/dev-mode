@@ -175,3 +175,25 @@ export const joinPool = async ({ poolID, userAddress, deposit }) => {
   }
 };
 
+/**
+ * 현재 로그인된 유저 정보 가져오기
+ */
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  return user;
+}
+
+/**
+ * 프로필(지갑 주소 등) 가져오기
+ * @param {string} userId
+ */
+export async function getUserProfile(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')          // 프로필 테이블의 모든 칼럼 Fetch
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return data;            // { id, name, phone, birth_number, gender, wallet_id, ... }
+}
