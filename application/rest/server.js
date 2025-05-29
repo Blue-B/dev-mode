@@ -194,19 +194,42 @@ app.get('/getWalletBalance', async function (req, res) {
 // ================= 대출 시스템 API ==================
 
 // 대출 요청 생성
-// app.get('/createLoan', function (req, res) {
-//     let { id, lender, borrower, amount, durationDays, interestRate } = req.query;
-//     let args = [id, lender, borrower, amount, durationDays, interestRate];
-//     sdk.send(false, 'CreateLoanRequest', args, res);
+// app.get('/createLoan', async function (req, res) {
+//   const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+//   const args = [id, lender, borrower, amount, durationDays, interestRate];
+
+//   try {
+//     const result = await sdk.send(false, 'CreateLoanRequest', args);
+//     return res.json(result);
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message });
+//   }
 // });
 app.get('/createLoan', async function (req, res) {
   const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
   const args = [id, lender, borrower, amount, durationDays, interestRate];
 
   try {
-    const result = await sdk.send(false, 'CreateLoanRequest', args);
-    return res.json(result);
+    const txId = await sdk.send(false, 'CreateLoanRequest', args); // txId 반환됨
+
+    // 체인 호출 성공 → Supabase에 저장
+    const { error } = await supabase.from('loans').insert([{
+      id: crypto.randomUUID(),           // 오프체인용 고유 ID
+      loan_chain_id: id,                 // 체인에 저장한 loan ID
+      tx_hash: txId,                     // 블록체인 트랜잭션 ID
+      created_at: new Date().toISOString(),
+      pool_id: null                      // pool 없는 경우 null
+    }]);
+
+    if (error) {
+      console.error('❌ DB 저장 실패:', error);
+      return res.status(500).json({ error: 'DB 저장 실패' });
+    }
+
+    return res.json({ message: 'Loan created on chain and DB', txId });
+
   } catch (err) {
+    console.error('❌ 체인 오류:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -328,20 +351,6 @@ app.post('/createPool', async (req, res) => {
   }
 });
 
-
-
-
-// 대출풀 조회 
-// app.get('/queryPool', function (req, res) {
-//   const { id } = req.query;
-
-//   if (!id) {
-//     return res.status(400).json({ error: 'Missing pool ID' });
-//   }
-
-//   const args = [id];
-//   sdk.send(true, 'QueryPool', args, res);
-// });
 app.get('/queryPool', async function (req, res) {
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: 'Missing pool ID' });
@@ -354,10 +363,6 @@ app.get('/queryPool', async function (req, res) {
   }
 });
 
-
-// app.get('/queryAllPools', (req, res) => {
-//   sdk.send(true, 'QueryAllPools', [], res); 
-// });
 app.get('/queryAllPools', async (req, res) => {
   try {
     const result = await sdk.send(true, 'QueryAllPools', []);
@@ -367,19 +372,6 @@ app.get('/queryAllPools', async (req, res) => {
   }
 });
 
-
-
-// 대출풀 참여
-// app.post('/joinPool', async (req, res) => {
-//   const { poolID, userAddress, deposit } = req.body;
-
-//   if (!poolID || !userAddress || !deposit) {
-//     return res.status(400).json({ error: 'Missing required fields' });
-//   }
-
-//   const args = [poolID, userAddress, deposit.toString()];
-//   sdk.send(false, 'JoinPool', args, res);
-// });
 app.post('/joinPool', async (req, res) => {
   const { poolID, userAddress, deposit } = req.body;
 
@@ -394,7 +386,6 @@ app.post('/joinPool', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
 
 
 // ================= 정적 파일 서비스 및 React 라우팅 ==================
