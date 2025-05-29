@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createWallet, getWalletBalance, createLoan, queryAllLoans, approveLoan, denyLoan } from '../services/api';
+import { createWallet, getWalletBalance, createLoan, approveLoan, denyLoan, queryMyLoans } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../contexts/AuthContext';
 import { createClient } from '@supabase/supabase-js';
@@ -155,12 +155,13 @@ const Dashboard = () => {
             endDateTimestamp //만기일 타임스탬프
         };
 
-        await createLoan(completeLoan); // API호출
-        alert('대출 요청이 생성되었습니다!');
-        fetchLoans();
-        setNewLoan({ lender: '', borrower: '', amount: 0, durationDays: 0, interestRate: 0, endDateTimestamp: null });
-        setSelectedMonths(0);
-        setCalculatedEndDate(null);
+            await createLoan(completeLoan); // API호출
+            alert('대출 요청이 생성되었습니다!');
+            await loadMyLoans();    
+
+            setNewLoan({ lender: '', borrower: '', amount: 0, durationDays: 0, interestRate: 0, endDateTimestamp: null });
+            setSelectedMonths(0);
+            setCalculatedEndDate(null);
         } catch (error) {
         console.error('대출 요청 생성 실패:', error);
         alert('대출 요청 생성 실패: ' + (error.response?.data?.message || error.message));
@@ -185,12 +186,28 @@ const Dashboard = () => {
         }
     };
 
+    // 내 대출 목록만 가져오기
+    const loadMyLoans = async () => {
+        try {
+            const result = await queryMyLoans(walletAddress);
+            setLoans(Array.isArray(result) ? result : []);
+        } catch (error) {
+            console.error('내 대출 조회 실패:', error);
+            alert('내 대출 조회 실패: ' + (error.response?.data?.error || error.message));
+            setLoans([]);
+        }
+    };
+
+    useEffect(() => {
+        if (walletAddress) loadMyLoans();
+    }, [walletAddress]);
+
     // 대출 승인
     const handleApproveLoan = async (loanId) => {
         try {
             await approveLoan(loanId);
             alert('대출이 승인되었습니다!');
-            fetchLoans();
+            await loadMyLoans(); 
         } catch (error) {
             console.error('대출 승인 실패:', error);
             alert('대출 승인 실패: ' + (error.response?.data?.message || error.message));
@@ -202,37 +219,20 @@ const Dashboard = () => {
         try {
             await denyLoan(loanId);
             alert('대출이 거절되었습니다!');
-            fetchLoans();
+            await loadMyLoans(); 
         } catch (error) {
             console.error('대출 거절 실패:', error);
             alert('대출 거절 실패: ' + (error.response?.data?.message || error.message));
         }
     };
 
-    // 전체 대출 조회
-    const fetchLoans = async () => {
-        try {
-            const result = await queryAllLoans();
-            const loansArray = Array.isArray(result) ? result : [];
-            setLoans(loansArray);
-        } catch (error) {
-            console.error('대출 조회 실패:', error);
-            alert('대출 목록 조회 실패: ' + (error.response?.data?.message || error.message));
-            setLoans([]);
-        }
-    };
-
-    useEffect(() => { //대출 생성,승인,거절시 데이터 갱신
-        fetchLoans();
-    }, []);
-
-    if (loadingWallet || !walletAddress) {
-        return (
-            <div className="flex items-center justify-center h-[60vh]">
-            <p className="text-gray-500 text-lg">🪙 지갑을 불러오는 중입니다. 잠시만 기다려주세요...</p>
-            </div>
-        );
-    }
+    // if (loadingWallet || !walletAddress) {
+    //     return (
+    //         <div className="flex items-center justify-center h-[60vh]">
+    //         <p className="text-gray-500 text-lg">🪙 지갑을 불러오는 중입니다. 잠시만 기다려주세요...</p>
+    //         </div>
+    //     );
+    // }
 
 
 
@@ -306,23 +306,23 @@ const Dashboard = () => {
                     </div>
 
                       {/* 대출 기간 + 예정일 */}
-    <div className="relative">
-      <select
-        value={selectedMonths}
-        onChange={handleDurationChange}
-        className="border px-4 py-3 rounded-lg w-full text-lg"
-      >
-        <option value="">상환 기간 선택 (개월)</option>
-        {durationOptions.map((month) => (
-          <option key={month} value={month}>{month}개월</option>
-        ))}
-      </select>
-      {calculatedEndDate && (
-        <span className="absolute right-4 top-[13px] text-sm text-gray-500">
-          {calculatedEndDate.toISOString().split("T")[0]}
-        </span>
-      )}
-    </div>
+                    <div className="relative">
+                    <select
+                        value={selectedMonths}
+                        onChange={handleDurationChange}
+                        className="border px-4 py-3 rounded-lg w-full text-lg"
+                    >
+                        <option value="">상환 기간 선택 (개월)</option>
+                        {durationOptions.map((month) => (
+                        <option key={month} value={month}>{month}개월</option>
+                        ))}
+                    </select>
+                    {calculatedEndDate && (
+                        <span className="absolute right-4 top-[13px] text-sm text-gray-500">
+                        {calculatedEndDate.toISOString().split("T")[0]}
+                        </span>
+                    )}
+                    </div>
 
                     <div className="flex items-center border rounded-lg px-4 py-3">
                         <input
@@ -346,57 +346,56 @@ const Dashboard = () => {
             </div>
 
             {/* 최근 활동 */}
+            {/* 로그인한 유저가 참여한 대출 활동 (최신순 정렬) */}
             <div>
                 <h2 className="text-xl font-semibold mb-4">최근 활동</h2>
                 <div className="space-y-4">
-                    {loans.map((loan) => (
+                    {loans
+                    .map((loan) => (
                         <div key={loan.id} className="flex items-center justify-between p-5 border rounded-xl">
-                            <div className="flex items-center space-x-4">
-                                <img src="https://via.placeholder.com/40" className="rounded-full" alt="user" />
-                                <div>
-                                    <p className="text-base">
-                                        {loan.lender}님이 {loan.borrower}님에게 대출을 요청했습니다
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                        {loan.amount.toLocaleString()} KRW • {loan.durationDays}일
-                                    </p>
-                                </div>
+                        <div className="flex items-center space-x-4">
+                            <img src="https://via.placeholder.com/40" className="rounded-full" alt="user" />
+                            <div>
+                            <p className="text-base">
+                                {loan.lender}님이 {loan.borrower}님에게 대출을 요청했습니다
+                            </p>
+                            <p className="text-sm text-gray-500">
+                                {loan.amount.toLocaleString()} KRW • {loan.durationDays}일
+                            </p>
                             </div>
-                            {loan.status === 'Pending' && (
-                                <div className="flex space-x-2">
-                                    <button
-                                        onClick={() => handleApproveLoan(loan.id)}
-                                        className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md hover:bg-green-100"
-                                    >
-                                        수락
-                                    </button>
-                                    <button
-                                        onClick={() => handleDenyLoan(loan.id)}
-                                        className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md hover:bg-red-100"
-                                    >
-                                        거절
-                                    </button>
-                                </div>
-                            )}
-                            {loan.status === 'Active' && (
-                                <span className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md">
-                                    진행중
-                                </span>
-                            )}
-                            {loan.status === 'Denied' && (
-                                <span className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md">
-                                    거절됨
-                                </span>
-                            )}
-                            {loan.status === 'Repaid' && (
-                                <span className="text-green-600 text-sm flex items-center space-x-1">
-                                    <span className="text-xl">✔</span> <span>완료</span>
-                                </span>
-                            )}
+                        </div>
+                        {loan.status === 'Pending' && (
+                            <div className="flex space-x-2">
+                            <button
+                                onClick={() => handleApproveLoan(loan.id)}
+                                className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md hover:bg-green-100"
+                            >
+                                수락
+                            </button>
+                            <button
+                                onClick={() => handleDenyLoan(loan.id)}
+                                className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md hover:bg-red-100"
+                            >
+                                거절
+                            </button>
+                            </div>
+                        )}
+                        {loan.status === 'Active' && (
+                            <span className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md">진행중</span>
+                        )}
+                        {loan.status === 'Denied' && (
+                            <span className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md">거절됨</span>
+                        )}
+                        {loan.status === 'Repaid' && (
+                            <span className="text-green-600 text-sm flex items-center space-x-1">
+                            <span className="text-xl">✔</span> <span>완료</span>
+                            </span>
+                        )}
                         </div>
                     ))}
                 </div>
             </div>
+
         </div>
     );
 };

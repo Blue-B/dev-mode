@@ -307,6 +307,20 @@ app.get('/queryAllLoans', async (req, res) => {
   }
 });
 
+// 로그인한 유저 관련 대출만 반환하는 API
+app.get('/myLoans', async (req, res) => {
+  const { wallet } = req.query;
+  if (!wallet) return res.status(400).json({ error: '지갑 주소가 필요합니다.' });
+
+  try {
+    // 체인코드 직접 호출
+    const loans = await sdk.send(true, 'QueryMyLoans', [wallet]);
+    res.json(loans);
+  } catch (err) {
+    console.error('myLoans API 실패:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 //= ================= 대출풀 시스템 API ==================
 // 대출풀 생성

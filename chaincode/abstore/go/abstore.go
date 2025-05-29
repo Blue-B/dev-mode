@@ -736,7 +736,32 @@ func (t *LoanContract) RepayLoanToPool(ctx contractapi.TransactionContextInterfa
 	return ctx.GetStub().PutState(id, loanJSON)
 }
 
+// QueryMyLoans - 로그인한 유저의 대출 요청만 조회
+func (t *LoanContract) QueryMyLoans(ctx contractapi.TransactionContextInterface, userAddress string) ([]*LoanRequest, error) {
+    // 전체 키 범위 스캔
+    iter, err := ctx.GetStub().GetStateByRange("", "")
+    if err != nil {
+        return nil, err
+    }
+    defer iter.Close()
 
+    var result []*LoanRequest
+    for iter.HasNext() {
+        kv, err := iter.Next()
+        if err != nil {
+            return nil, err
+        }
+        var loan LoanRequest
+        if err := json.Unmarshal(kv.Value, &loan); err != nil {
+            continue
+        }
+        // lender나 borrower가 userAddress인 것만
+        if loan.Lender == userAddress || loan.Borrower == userAddress {
+            result = append(result, &loan)
+        }
+    }
+    return result, nil
+}
 
 func main() {
 	cc, err := contractapi.NewChaincode(new(LoanContract))

@@ -115,6 +115,16 @@ export const queryAllLoans = async () => {
   }
 }; 
 
+export const queryMyLoans = async (walletAddress) => {
+  try {
+    const response = await api.get(`/myLoans?wallet=${walletAddress}`);
+    return response.data;
+  } catch (error) {
+    console.error('내 대출 목록 조회 실패:', error);
+    throw error;
+  }
+};
+
 // 대출풀 관련 API (api 인스턴스 사용)
 export const createPool = async (poolData) => {
   try {
