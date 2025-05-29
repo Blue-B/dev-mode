@@ -42,8 +42,14 @@ async function send(type, func, args) {
         return resultStr; // 아니면 문자열 그대로 반환
       }
     } else {
-      await contract.submitTransaction(func, ...args);
-      return "Success";
+      // Submit with txId 로그, submitTransaction() 수동 방식
+      const transaction = contract.createTransaction(func);
+      const txId = transaction.getTransactionId();
+      console.log(`🆔 ${func} 트랜잭션 ID → ${txId}`);
+
+      const response = await transaction.submit(...args);
+      console.log(`🎉 ${func} 제출 성공 → 응답: ${response ? response.toString() : 'No payload'}`);
+      return txId;
     }
 
   } catch (error) {
