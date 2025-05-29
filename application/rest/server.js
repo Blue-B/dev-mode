@@ -42,7 +42,7 @@ app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "connect-src 'self' https://*.supabase.co https://www.google.com https://www.gstatic.com; " +
+    "connect-src 'self' http://localhost:* https://*.supabase.co https://www.google.com https://www.gstatic.com; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; " +
     "frame-src 'self' https://www.google.com; " +
     "style-src 'self' 'unsafe-inline'; " +
