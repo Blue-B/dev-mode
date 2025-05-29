@@ -1,65 +1,93 @@
-import { useState } from "react";
+// src/pages/MyPage.jsx
+
+import React, { useEffect, useState } from 'react';
+import { getCurrentUser, getUserProfile, getWalletBalance } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const MyPage = () => {
+  const [profile, setProfile] = useState(null);
+  const [balance, setBalance] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
+  const navigate = useNavigate();
 
-  const user = {
-    email: "user@example.com",
-    balance: "1,000,000 KRW",
-    repaymentRate: "10%",
-    walletId: "Wallet ID:12345"
-  };
+  // 1) 로그인된 유저 + 프로필 + 잔액 한 번에 로드
+  useEffect(() => {
+    const load = async () => {
+      try {
+        // Supabase Auth user
+        const user = await getCurrentUser();
+        // profiles 테이블에서 모든 칼럼(*) 가져오기
+        const prof = await getUserProfile(user.id);
+        setProfile(prof);
+        // wallet_id 가 있으면 잔액 조회
+        if (prof.wallet_id) {
+          const bal = await getWalletBalance(prof.wallet_id);
+          setBalance(bal);
+        }
+      } catch (err) {
+        console.error('마이페이지 로드 실패:', err);
+        // 필요시 에러 처리
+      }
+    };
+    load();
+  }, []);
 
-  const handleCopyWallet = () => {
-    navigator.clipboard.writeText(user.walletId)
+  // 지갑 ID 복사 / 연결 해제 토글
+  const handleCopyOrDisconnect = () => {
+    if (!profile?.wallet_id) return;
+    navigator.clipboard.writeText(profile.wallet_id)
       .then(() => {
         setIsCopied(true);
-        alert("지갑 ID가 클립보드에 복사되었습니다.");
         setTimeout(() => setIsCopied(false), 2000);
       })
-      .catch((error) => {
-        alert("지갑 ID를 복사하는 데 실패했습니다.");
-        console.error("Failed to copy wallet ID:", error);
+      .catch(err => {
+        console.error('클립보드 복사 실패:', err);
+        alert('지갑 ID 복사에 실패했습니다.');
       });
   };
 
+  if (!profile) {
+    return (
+      <main className="flex-1 p-8">
+        <p>로딩 중...</p>
+      </main>
+    );
+  }
+
+  // 동적으로 보여줄 항목 목록
+  const items = [
+    { label: '이메일',     value: profile.email },
+    { label: '이름',       value: profile.name            },
+    { label: '전화번호',   value: profile.phone           },
+    { label: '생년월일',   value: profile.birth_number    },
+    { label: '성별',       value: profile.gender          },
+    { label: '잔액',       value: `${balance.toLocaleString()} KRW` },
+    { label: '지갑',       value: profile.wallet_id       },
+    // 추가하고 싶은 칼럼이 생기면 여기만 추가!
+  ];
+
   return (
     <main className="flex-1 overflow-auto bg-white">
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold mb-8">내 정보</h1>
 
         <div className="bg-white border rounded-lg divide-y">
-          {/* 이메일 */}
-          <div className="flex justify-between items-center px-6 py-4">
-            <div className="text-sm text-gray-500 w-32">이메일</div>
-            <div className="flex-1 text-gray-800">{user.email}</div>
-          </div>
-
-          {/* 잔액 */}
-          <div className="flex justify-between items-center px-6 py-4">
-            <div className="text-sm text-gray-500 w-32">잔액</div>
-            <div className="flex-1 text-gray-800 font-medium">{user.balance}</div>
-          </div>
-
-          {/* 상환율 */}
-          <div className="flex justify-between items-center px-6 py-4">
-            <div className="text-sm text-gray-500 w-32">상환율</div>
-            <div className="flex-1 text-gray-800">{user.repaymentRate}</div>
-          </div>
-
-          {/* 지갑 */}
-          <div className="flex justify-between items-center px-6 py-4">
-            <div className="text-sm text-gray-500 w-32">지갑</div>
-            <div className="flex-1 flex justify-between items-center">
-              <span className="text-gray-800">{user.walletId}</span>
-              <button 
-                onClick={handleCopyWallet} 
-                className="bg-[#ff6b6b] bg-opacity-10 text-[#ff6b6b] hover:bg-opacity-20 transition-all text-sm px-4 py-2 rounded"
-              >
-                {isCopied ? "복사됨" : "지갑 연결해제"}
-              </button>
+          {items.map(({ label, value }) => (
+            <div key={label} className="flex justify-between items-center px-6 py-4">
+              <div className="text-sm text-gray-500 w-32">{label}</div>
+              <div className="flex-1 text-gray-800">
+                {value || '-'}
+              </div>
+              {label === '지갑' && profile.wallet_id && (
+                <button
+                  onClick={handleCopyOrDisconnect}
+                  className="ml-4 bg-red-100 text-red-600 hover:bg-red-200 transition-all text-sm px-4 py-2 rounded"
+                >
+                  {isCopied ? '복사됨' : '지갑 복사'}
+                </button>
+              )}
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </main>
