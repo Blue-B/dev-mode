@@ -27,8 +27,7 @@ sudo rm -rf basic-network/organizations/fabric-ca/org2
 rm -rf application/wallet
 rm -rf application/connection-org1.json
 #rm -rf application/package-lock.json
-#rm -rf application/node_modules
-
+#rm -rf application/node_modul
 echo "📦 Supabase .env 환경변수 로드"
 
 ENV_PATH="/home/ubuntu/go/src/dev-mode/application/rest/.env"
@@ -46,4 +45,4 @@ curl -X POST "$SUPABASE_URL/rest/v1/rpc/reset_wallets" \
   -H "Content-Type: application/json" \
   -d '{}' || echo "⚠️ Supabase 초기화 실패"
 
-echo "✅ Fabric + Supabase 초기화 완료"
+echo "✅ Fabric + Supabase 초기화 완료"es

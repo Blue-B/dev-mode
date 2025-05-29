@@ -164,3 +164,4 @@ export const joinPool = async ({ poolID, userAddress, deposit }) => {
     throw error;
   }
 };
+
