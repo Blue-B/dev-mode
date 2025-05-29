@@ -114,3 +114,54 @@ export const queryAllLoans = async () => {
     throw error;
   }
 }; 
+
+// 대출풀 관련 API (api 인스턴스 사용)
+export const createPool = async (poolData) => {
+  try {
+    const response = await api.post('/createPool', poolData);
+
+    return response.data;
+  } catch (error) {
+    console.error('대출풀 생성 실패:', error);
+    throw error;
+  }
+};
+
+export const queryPool = async (id) => {
+  try {
+    const response = await api.get(`/queryPool?id=${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('단일 풀 조회 실패:', error);
+    throw error;
+  }
+};
+
+export const queryAllPools = async () => {
+  try {
+    const response = await api.get('/queryAllPools');
+
+    // 🔧 participants와 weights를 보정
+    const fixedData = (Array.isArray(response.data) ? response.data : response.data.result).map(pool => ({
+      ...pool,
+      participants: Array.isArray(pool.participants) ? pool.participants : [],
+      weights: typeof pool.weights === 'object' && pool.weights !== null ? pool.weights : {},
+    }));
+
+    return fixedData;
+  } catch (error) {
+    console.error('전체 풀 조회 실패:', error);
+    throw error;
+  }
+};
+
+export const joinPool = async ({ poolID, userAddress, deposit }) => {
+  try {
+    const response = await api.post('/joinPool', { poolID, userAddress, deposit });
+    return response.data;
+  } catch (error) {
+    console.error('풀 참여 실패:', error);
+    throw error;
+  }
+};
+
