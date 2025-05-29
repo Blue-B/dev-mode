@@ -1,249 +1,166 @@
-// import axios from 'axios';
-
-// const API_BASE_URL = 'http://localhost:8001';
-
-// // 지갑 관련 API
-// // POST 방식으로 변경
-// export const createWallet = async (userId) => {
-//   try {
-//      console.log("api.js Sending wallet create request", userId);
-//     const response = await axios.post(`${API_BASE_URL}/wallet/create`, { userId });
-//     return response.data;
-//   } catch (error) {
-//     throw error;
-//   }
-// };
-
-
-// export const getWalletBalance = async (address) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/getWalletBalance`, {
-//             params: { address }
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// // 대출 관련 API
-// export const createLoan = async (loanData) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/createLoan`, {
-//             params: loanData
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// export const approveLoan = async (id) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/approveLoan`, {
-//             params: { id }
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// export const denyLoan = async (id) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/denyLoan`, {
-//             params: { id }
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// export const repayLoan = async (id) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/repayLoan`, {
-//             params: { id }
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// export const queryLoan = async (id) => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/queryLoan`, {
-//             params: { id }
-//         });
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-// export const queryAllLoans = async () => {
-//     try {
-//         const response = await axios.get(`${API_BASE_URL}/queryAllLoans`);
-//         return response.data;
-//     } catch (error) {
-//         throw error;
-//     }
-// }; 
-
-
-// // 대출풀 관련 API
-
-// export const createPool = async (poolData) => {
-//   return await axios.post(`${API_BASE_URL}/createPool`, poolData);
-// };
-
-// // 특정 대출풀 조회 (체인코드 기반)
-// export const queryPool = async (id) => {
-//   try {
-//     const response = await axios.get(`${API_BASE_URL}/queryPool`, {
-//       params: { id }
-//     });
-//     return response.data;
-//   } catch (error) {
-//     throw error;
-//   }
-// };
-
-// export const queryAllPools = async () => {
-//   try {
-//     const response = await axios.get(`${API_BASE_URL}/queryAllPools`);
-//     console.log("🌐 API 응답:", response.data);
-
-//     const result = Array.isArray(response.data) ? response.data : response.data.result;
-//     return result;
-//   } catch (error) {
-//     console.error('Error fetching all pools:', error);
-//     throw error;
-//   }
-// };
-
 import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 const API_BASE_URL = 'http://localhost:8001';
 
+// API 요청을 위한 axios 인스턴스 생성
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// 요청 인터셉터 추가
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  return config;
+});
+
 // 지갑 관련 API
+// POST 방식으로 변경
 export const createWallet = async (userId) => {
   try {
-    console.log("api.js Sending wallet create request", userId);
-    const response = await axios.post(`${API_BASE_URL}/wallet/create`, { userId });
+    const response = await api.post('/wallet/create', { userId });
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('api.js Sending wallet create request', userId);
+    throw error;
   }
 };
 
 export const getWalletBalance = async (address) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/getWalletBalance`, {
-      params: { address }
-    });
+    const response = await api.get(`/getWalletBalance?address=${address}`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('잔액 조회 실패:', error);
+    throw error;
   }
 };
 
 // 대출 관련 API
 export const createLoan = async (loanData) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/createLoan`, {
-      params: loanData
+    const response = await api.get('/createLoan', {
+      params: {
+        id: loanData.id,
+        lender: loanData.lender,
+        borrower: loanData.borrower,
+        amount: loanData.amount,
+        durationDays: loanData.durationDays,
+        interestRate: loanData.interestRate
+      }
     });
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('대출 생성 실패:', error);
+    throw error;
   }
 };
 
-export const approveLoan = async (id) => {
+export const approveLoan = async (loanId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/approveLoan`, {
-      params: { id }
-    });
+    const response = await api.get(`/approveLoan?id=${loanId}`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('대출 승인 실패:', error);
+    throw error;
   }
 };
 
-export const denyLoan = async (id) => {
+export const denyLoan = async (loanId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/denyLoan`, {
-      params: { id }
-    });
+    const response = await api.get(`/denyLoan?id=${loanId}`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('대출 거절 실패:', error);
+    throw error;
   }
 };
 
 export const repayLoan = async (id) => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/repayLoan`, {
-      params: { id }
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error;
-  }
+    try {
+        const response = await api.get(`/repayLoan?id=${id}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
 
 export const queryLoan = async (id) => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/queryLoan`, {
-      params: { id }
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || error;
-  }
+    try {
+        const response = await api.get(`/queryLoan?id=${id}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
 
 export const queryAllLoans = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/queryAllLoans`);
+    const response = await api.get('/queryAllLoans');
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('대출 조회 실패:', error);
+    throw error;
   }
-};
+}; 
 
-// 대출풀 관련 API
+// 대출풀 관련 API (api 인스턴스 사용)
 export const createPool = async (poolData) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/createPool`, poolData);
+    const response = await api.post('/createPool', poolData);
+
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('대출풀 생성 실패:', error);
+    throw error;
   }
 };
 
 export const queryPool = async (id) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/queryPool`, {
-      params: { id }
-    });
+    const response = await api.get(`/queryPool?id=${id}`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    console.error('단일 풀 조회 실패:', error);
+    throw error;
   }
 };
 
 export const queryAllPools = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/queryAllPools`);
-    console.log("🌐 API 응답:", response.data);
+    const response = await api.get('/queryAllPools');
 
-    const result = Array.isArray(response.data) ? response.data : response.data.result;
-    return result;
+    // 🔧 participants와 weights를 보정
+    const fixedData = (Array.isArray(response.data) ? response.data : response.data.result).map(pool => ({
+      ...pool,
+      participants: Array.isArray(pool.participants) ? pool.participants : [],
+      weights: typeof pool.weights === 'object' && pool.weights !== null ? pool.weights : {},
+    }));
+
+    return fixedData;
   } catch (error) {
-    console.error('Error fetching all pools:', error);
-    throw error.response?.data || error;
+    console.error('전체 풀 조회 실패:', error);
+    throw error;
+  }
+};
+
+export const joinPool = async ({ poolID, userAddress, deposit }) => {
+  try {
+    const response = await api.post('/joinPool', { poolID, userAddress, deposit });
+    return response.data;
+  } catch (error) {
+    console.error('풀 참여 실패:', error);
+    throw error;
   }
 };
