@@ -213,17 +213,36 @@ app.get('/createLoan', async function (req, res) {
 
 
 // 대출 승인
-app.get('/approveLoan', function (req, res) {
-    let { id } = req.query;
-    let args = [id];
-    sdk.send(false, 'ApproveLoanRequest', args, res);
+app.get('/approveLoan', async (req, res) => {
+  const { id } = req.query;
+  console.log('📥 대출 승인 요청 도착 id =', id);
+
+  try {
+    const result = await sdk.send(false, 'ApproveLoanRequest', [id]);
+    console.log('✅ ApproveLoanRequest 성공, 체인코드 응답 =', result);
+    return res.json({ success: true, result });
+  } catch (err) {
+    console.error('❌ ApproveLoanRequest 오류:', err.message);
+    // err 전체를 찍어 보면 status, peers별 메시지도 확인할 수 있습니다.
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // 대출 거절
-app.get('/denyLoan', function (req, res) {
-    let { id } = req.query;
-    let args = [id];
-    sdk.send(false, 'DenyLoanRequest', args, res);
+app.get('/denyLoan', async (req, res) => {
+  const { id } = req.query;
+  console.log('📥 대출 거절 요청 도착 id =', id);
+
+  try {
+    const result = await sdk.send(false, 'DenyLoanRequest', [id]);
+    console.log('✅ DenyLoanRequest 성공, 체인코드 응답 =', result);
+    return res.json({ success: true, result });
+  } catch (err) {
+    console.error('❌ DenyLoanRequest 오류:', err.message);
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // 대출 상환

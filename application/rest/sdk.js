@@ -12,6 +12,9 @@ const ccpPath = path.resolve(__dirname, '..', 'connection-org1.json');
 const org1UserId = 'appUser';
 
 async function send(type, func, args) {
+  // 1) 호출 직전: 어떤 함수, 어떤 인자로 호출되는지
+  console.log(`🔗 체인코드 호출 → ${func}(${args.join(', ')})`);
+
   try {
     const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
     const wallet = await Wallets.newFileSystemWallet(walletPath);
@@ -29,6 +32,10 @@ async function send(type, func, args) {
     if (type) {
       const result = await contract.evaluateTransaction(func, ...args);
       const resultStr = result.toString();
+
+      // 2) 평가(조회) 성공 직후
+      console.log(`🎉 ${func} 평가 성공 → 응답: ${resultStr}`);
+
       try {
         return JSON.parse(resultStr); // JSON이면 파싱
       } catch {
@@ -40,6 +47,11 @@ async function send(type, func, args) {
     }
 
   } catch (error) {
+
+        // 4) 에러 발생 시: 에러 메시지와 전체 스택
+    console.error(`🚨 ${func} 에러 발생 →`, error.message);
+    console.error(error);
+    
     throw new Error(`send() 오류: ${error.message}`);
   }
 }
