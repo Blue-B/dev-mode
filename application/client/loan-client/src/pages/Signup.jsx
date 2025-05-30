@@ -652,7 +652,7 @@ const Signup = () => {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="max-w-md w-full relative">
-        {currentStep > 1 && (
+        {currentStep > 1 && (currentStep !== 3 || !isGoogleUser) && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
