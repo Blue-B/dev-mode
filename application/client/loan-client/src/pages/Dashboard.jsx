@@ -307,7 +307,7 @@ const Dashboard = () => {
     return (
         <div className="bg-white text-gray-800 p-10 text-[17px] max-w-6xl mx-auto">
             {/* 상단 카드 */}
-            <div className="grid grid-cols-4 gap-4 mb-10">
+            <div className="grid grid-cols-4 gap-4 mb-10 max-w-4xl mx-auto">
                 {[{ title: '신용 점수', value: '850', subtitle: '▲2.5%', color: 'text-green-500' },
                   { title: '활성 대출', value: activeCount, subtitle: `총 ${activeAmount.toLocaleString()} KRW` },
                   { title: '대출 상환율', value: '98%', subtitle: '지난 12개월' },
@@ -324,7 +324,7 @@ const Dashboard = () => {
             </div>
 
             {/* 요청 강조 카드 */}
-            <div className="flex flex-col sm:flex-row sm:justify-between items-center p-6 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl shadow-md mb-10 max-w-3xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:justify-between items-center p-6 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl shadow-md mb-10 max-w-4xl mx-auto">
                 <div className="mb-4 sm:mb-0">
                     <h2 className="text-lg sm:text-xl font-semibold mb-1">친구에게 대출 요청</h2>
                     <p className="mb-3 text-sm">
