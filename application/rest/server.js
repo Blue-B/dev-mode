@@ -539,6 +539,29 @@ async function verifyRecaptcha(token) {
   }
 }
 
+// 이메일 확인 API
+app.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Supabase에서 사용자 확인
+    const { data: { users }, error } = await supabase.auth.admin.listUsers();
+    if (error) throw error;
+    
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      return res.json({ exists: false });
+    }
+    
+    return res.json({
+      exists: true,
+      provider: user.app_metadata.provider || 'email'
+    });
+  } catch (error) {
+    console.error('이메일 확인 에러:', error);
+    res.status(500).json({ error: '이메일 확인 중 오류가 발생했습니다.' });
+  }
+});
 
 // 서버 시작
 app.listen(PORT, HOST);
