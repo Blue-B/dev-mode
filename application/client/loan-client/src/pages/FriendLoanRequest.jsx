@@ -1,21 +1,113 @@
-import React, { useState } from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchAcceptedFriendsWithWallets, createLoan, getUserWalletAddress } from '../services/api';
+import { useAuth } from '../contexts/AuthContext'; 
+import { createClient } from '@supabase/supabase-js';
+import {v4 as uuidv4} from 'uuid';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 const FriendLoanRequest = () => {
   const navigate = useNavigate();
+  const {user} = useAuth();
 
   const [amount, setAmount] = useState('');
   const [interest, setInterest] = useState(5);
+
   const [duration, setDuration] = useState(12);
+  const [customDuration, setCustomDuration] = useState('');
+
   const [receiver, setReceiver] = useState('');
   const [message, setMessage] = useState('');
   const [step, setStep] = useState(1); // 1: 대출 조건, 2: 친구 선택
+  const [friendWallets, setFriendWallets] = useState([]);
+  const [userWalletAddress, setUserWalletAddress] = useState('');
 
-  const friends = [
-    { name: '김철수', avatar: 'https://via.placeholder.com/40', online: true },
-    { name: '이영희', avatar: 'https://via.placeholder.com/40', online: false },
-    { name: '박민수', avatar: 'https://via.placeholder.com/40', online: true },
-  ];
+  useEffect(() => {
+    const fetchUserWallet = async () => {
+        if (!user?.id) return;
+
+        try {
+        const wallet = await getUserWalletAddress(user.id);
+        setUserWalletAddress(wallet);
+        } catch (err) {
+        console.error('🔍 사용자 지갑 주소 조회 실패:', err.message);
+        alert(err.message);
+        }
+    };
+
+    fetchUserWallet();
+  }, [user?.id]);
+
+
+  useEffect(() => {
+    const loadFriendWallets = async () => {
+        try {
+            const profiles = await fetchAcceptedFriendsWithWallets(user?.id, supabase);
+            setFriendWallets(profiles);
+        } catch (err) {
+            console.error(err.message);
+        }
+    };
+
+    loadFriendWallets();
+  }, [user?.id]);
+
+  // 대출 종료일 계산 함수 (위로 올리되 사용은 아래에서)
+  const calculateEndDate = (startDate, months) => {
+  const end = new Date(startDate);
+  end.setMonth(end.getMonth() + months);
+  return end;
+  };
+
+  const formattedEndDate = useMemo(() => {
+    const months = duration === 0 ? parseInt(customDuration) || 0 : duration;
+    const endDate = calculateEndDate(new Date(), months);
+    return `${endDate.getFullYear()}. ${endDate.getMonth() + 1}. ${endDate.getDate()}.`;
+  }, [duration, customDuration]);
+
+
+  // 대출 요청 생성
+  const handleCreateLoan = async (borrowerWalletId) => {
+    try {
+      if (!userWalletAddress || !borrowerWalletId || !amount || !duration || !interest) {
+        alert('모든 필드를 입력해주세요.');
+        return;
+      }
+
+      if (userWalletAddress === borrowerWalletId) {
+        alert('대출자와 차입자는 같은 지갑일 수 없습니다.');
+        return;
+      }
+
+      const loanId = uuidv4();
+      const months = duration === 0 ? parseInt(customDuration) : duration;
+      const endDate = calculateEndDate(new Date(), months);
+
+      const loanData = {
+        id: loanId,
+        lender: userWalletAddress,
+        borrower: borrowerWalletId,
+        amount: parseInt(amount),
+        interestRate: parseFloat(interest),
+        durationDays: months * 30,
+        endDateTimestamp: endDate.getTime(),
+        message,
+      };
+
+
+      await createLoan(loanData);
+
+      alert('대출 요청이 생성되었습니다.');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('대출 생성 실패:', error);
+      alert('대출 생성 실패: ' + (error?.response?.data?.message || error.message));
+    }
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen py-10 px-4">
@@ -81,39 +173,32 @@ const FriendLoanRequest = () => {
               <div>
                 <label className="font-semibold block mb-1">상환 기간</label>
                 <select
-                  value={duration}
-                  onChange={e => setDuration(parseInt(e.target.value))}
-                  className="w-full border px-4 py-2 rounded-md"
-                >
-                  {[3, 6, 12, 24, 36].map(month => (
-                    <option key={month} value={month}>{month}개월</option>
-                  ))}
-                  <option value={0}>직접입력</option>
-                </select>
-                <p className="text-sm text-gray-500 mt-1">상환일: <span className="font-medium">2026. 5. 24.</span></p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-semibold block mb-1">대출자 (보내는 사람)</label>
-                  <input
-                    type="text"
-                    value="나"
-                    disabled
-                    className="w-full border px-4 py-2 rounded-md bg-gray-100 text-center"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold block mb-1">차입자 (받는 친구)</label>
-                  <input
-                    type="text"
-                    value={receiver}
-                    onChange={e => setReceiver(e.target.value)}
+                    value={duration}
+                    onChange={e => setDuration(parseInt(e.target.value))}
                     className="w-full border px-4 py-2 rounded-md"
-                    placeholder="친구 이름을 입력하세요"
-                  />
+                    >
+                    {[3, 6, 12, 24, 36].map(month => (
+                        <option key={month} value={month}>{month}개월</option>
+                    ))}
+                    <option value={0}>직접입력</option>
+                  </select>
+
+                    {duration === 0 && (
+                    <input
+                        type="number"
+                        value={customDuration}
+                        onChange={e => setCustomDuration(e.target.value)}
+                        placeholder="개월 수 직접 입력"
+                        className="w-full mt-2 border px-3 py-2 rounded-md"
+                    />
+                    )}
+
+
+                <p className="text-sm text-gray-500 mt-1">
+                상환일: <span className="font-medium">{formattedEndDate}</span>
+                </p>
+
                 </div>
-              </div>
 
               <div>
                 <label className="font-semibold block mb-1">요청 메시지 (선택사항)</label>
@@ -129,7 +214,14 @@ const FriendLoanRequest = () => {
               <div className="border-t pt-4 text-sm text-gray-700 space-y-1">
                 <p>대출 금액 <strong>{amount ? `${parseInt(amount).toLocaleString()}원` : '0원'}</strong></p>
                 <p>연 이자율 <strong>{interest}%</strong></p>
-                <p>상환 기간 <strong>{duration}개월</strong></p>
+                <p>
+                  상환 기간{' '}
+                  <strong>
+                    {duration === 0
+                      ? `${customDuration || 0}개월`
+                      : `${duration}개월`}
+                  </strong>
+                </p>
               </div>
 
               <div className="flex gap-3 mt-4">
@@ -150,34 +242,35 @@ const FriendLoanRequest = () => {
           {step === 2 && (
             <>
               <h3 className="text-lg font-semibold mb-2">대출을 요청할 친구를 선택하세요</h3>
-              <ul className="divide-y">
-                {friends.map(friend => (
-                  <li
-                    key={friend.name}
-                    className="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 px-2 rounded"
-                    onClick={() => {
-                      setReceiver(friend.name);
-                      alert(`${friend.name}님에게 요청할 준비가 되었습니다.`);
-                      navigate('/dashboard'); // 다음 단계로 이동
-                    }}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <img
-                        src={friend.avatar}
-                        alt={friend.name}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div>
-                        <p className="font-medium">{friend.name}</p>
-                        <p className={`text-sm ${friend.online ? 'text-green-500' : 'text-gray-400'}`}>
-                          {friend.online ? '접속 중' : '오프라인'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm text-blue-600">요청</span>
-                  </li>
-                ))}
-              </ul>
+             {friendWallets.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                    친구가 없습니다. 친구를 추가해보세요.
+                </p>
+                ) : (
+                  <ul className="divide-y">
+                    {friendWallets.map(friend => (
+                      <li
+                        key={friend.id}
+                        className="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 px-2 rounded"
+                        onClick={() => handleCreateLoan(friend.wallet_id)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <img
+                            src={`https://api.dicebear.com/7.x/initials/svg?seed=${friend.name}`}
+                            alt={friend.name}
+                            className="w-10 h-10 rounded-full"
+                          />
+                          <div>
+                            <p className="font-medium">{friend.name}</p>
+                            <p className="text-sm text-gray-400">{friend.email}</p>
+                          </div>
+                        </div>
+                        <span className="text-sm text-blue-600">요청</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
               <button
                 className="mt-6 w-full py-2 rounded-md border text-gray-600 hover:bg-gray-100"
                 onClick={() => setStep(1)}

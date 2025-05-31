@@ -26,6 +26,23 @@ api.interceptors.request.use(async (config) => {
 });
 
 // 지갑 관련 API
+/**
+ * Supabase에서 로그인 유저의 wallet_id를 조회하는 함수
+ * @param {string} userId Supabase auth.users.id
+ * @returns {Promise<string>} wallet_id
+ */
+export const getUserWalletAddress = async (userId) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('wallet_id')
+    .eq('id', userId)
+    .single();
+
+  if (error) throw new Error('지갑 주소 조회 실패: ' + error.message);
+  if (!data?.wallet_id) throw new Error('지갑 주소가 등록되지 않았습니다.');
+  return data.wallet_id;
+};
+
 // POST 방식으로 변경
 export const createWallet = async (userId) => {
   try {
@@ -197,3 +214,45 @@ export async function getUserProfile(userId) {
   if (error) throw error;
   return data;            // { id, name, phone, birth_number, gender, wallet_id, ... }
 }
+
+// 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
+export const fetchAcceptedFriendsWithWallets = async (userId, supabase) => {
+    if (!userId) return [];
+
+    // 1. 친구 요청 (내가 보낸 것)
+    const { data: sent, error: sentError } = await supabase
+        .from('friends')
+        .select('friend_user_id')
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
+
+    // 2. 친구 요청 (내가 받은 것)
+    const { data: received, error: receivedError } = await supabase
+        .from('friends')
+        .select('user_id')
+        .eq('friend_user_id', userId)
+        .eq('status', 'accepted');
+
+    if (sentError || receivedError) {
+        throw new Error('친구 목록 조회 실패');
+    }
+
+    const friendIds = [
+        ...sent.map(f => f.friend_user_id),
+        ...received.map(f => f.user_id),
+    ];
+
+    if (friendIds.length === 0) return [];
+
+    const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', friendIds);
+
+    if (profileError) {
+        throw new Error('친구 프로필 조회 실패');
+    }
+
+    // wallet_id가 null이 아닌 친구들만 포함한 배열을 반환
+    return profiles.filter(profile => profile.wallet_id);
+};

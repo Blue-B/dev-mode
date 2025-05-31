@@ -84,6 +84,7 @@ const Dashboard = () => {
         }
     }, [walletAddress]);
 
+    // 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
     useEffect(() => {
         const fetchFriendWallets = async () => {
             if (!user?.id) return;
