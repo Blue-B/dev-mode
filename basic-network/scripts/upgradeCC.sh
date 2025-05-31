@@ -113,8 +113,6 @@ elif [ "$1" == "prod" ]; then
 else
  echo -n "unknown parameter"
  exit 1
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 fi
 
 function dev(){
@@ -272,8 +270,4 @@ elif [ "$1" == "prod" ]; then
 else
  echo -n "unknown parameter"
  exit 1
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 fi
