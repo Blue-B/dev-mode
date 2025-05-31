@@ -20,7 +20,6 @@ const FriendLoanRequest = () => {
   const [duration, setDuration] = useState(12);
   const [customDuration, setCustomDuration] = useState('');
 
-  const [receiver, setReceiver] = useState('');
   const [message, setMessage] = useState('');
   const [step, setStep] = useState(1); // 1: 대출 조건, 2: 친구 선택
   const [friendWallets, setFriendWallets] = useState([]);
@@ -71,14 +70,14 @@ const FriendLoanRequest = () => {
 
 
   // 대출 요청 생성
-  const handleCreateLoan = async (borrowerWalletId) => {
+  const handleCreateLoan = async (lenderWalletId) => {
     try {
-      if (!userWalletAddress || !borrowerWalletId || !amount || !duration || !interest) {
+      if (!userWalletAddress || !lenderWalletId || !amount || !duration || !interest) {
         alert('모든 필드를 입력해주세요.');
         return;
       }
 
-      if (userWalletAddress === borrowerWalletId) {
+      if (userWalletAddress === lenderWalletId) {
         alert('대출자와 차입자는 같은 지갑일 수 없습니다.');
         return;
       }
@@ -89,8 +88,8 @@ const FriendLoanRequest = () => {
 
       const loanData = {
         id: loanId,
-        lender: userWalletAddress,
-        borrower: borrowerWalletId,
+        lender: lenderWalletId,  // 빌려주는 사람
+        borrower: userWalletAddress,  // 채무자
         amount: parseInt(amount),
         interestRate: parseFloat(interest),
         durationDays: months * 30,
@@ -110,14 +109,14 @@ const FriendLoanRequest = () => {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen py-10 px-4">
+    <div className="min-h-screen px-4 py-10 bg-gray-50">
       <div className="max-w-xl mx-auto">
         {/* 제목 */}
-        <h2 className="text-base font-semibold text-blue-700 mb-1">친구에게 대출 요청</h2>
-        <p className="text-sm text-gray-500 mb-6">신뢰할 수 있는 친구로부터 안전하게 대출을 받아보세요</p>
+        <h2 className="mb-1 text-base font-semibold text-blue-700">친구에게 대출 요청</h2>
+        <p className="mb-6 text-sm text-gray-500">신뢰할 수 있는 친구로부터 안전하게 대출을 받아보세요</p>
 
         {/* 단계 표시 */}
-        <div className="flex items-center text-sm text-gray-400 mb-6 space-x-2">
+        <div className="flex items-center mb-6 space-x-2 text-sm text-gray-400">
           <span className={step === 1 ? 'text-blue-600 font-semibold' : ''}>1. 대출 조건</span>
           <span>›</span>
           <span className={step === 2 ? 'text-blue-600 font-semibold' : ''}>2. 친구 선택</span>
@@ -126,17 +125,17 @@ const FriendLoanRequest = () => {
         </div>
 
         {/* 카드 */}
-        <div className="bg-white p-6 rounded-xl shadow-md space-y-6">
+        <div className="p-6 space-y-6 bg-white shadow-md rounded-xl">
           {/* STEP 1: 대출 조건 입력 */}
           {step === 1 && (
             <>
               <div>
-                <label className="font-semibold block mb-1">대출 금액</label>
+                <label className="block mb-1 font-semibold">대출 금액</label>
                 <input
                   type="number"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
-                  className="w-full border px-4 py-2 rounded-md text-right"
+                  className="w-full px-4 py-2 text-right border rounded-md"
                   placeholder="대출금액을 입력해주세요"
                 />
                 <div className="grid grid-cols-4 gap-2 mt-2">
@@ -144,7 +143,7 @@ const FriendLoanRequest = () => {
                     <button
                       key={val}
                       onClick={() => setAmount(val)}
-                      className="bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-sm"
+                      className="px-2 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200"
                     >
                       {val.toLocaleString()}원
                     </button>
@@ -153,7 +152,7 @@ const FriendLoanRequest = () => {
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">희망 이자율</label>
+                <label className="block mb-1 font-semibold">희망 이자율</label>
                 <input
                   type="range"
                   min="0"
@@ -162,7 +161,7 @@ const FriendLoanRequest = () => {
                   onChange={e => setInterest(parseInt(e.target.value))}
                   className="w-full"
                 />
-                <div className="text-sm text-gray-500 mt-1 flex justify-between">
+                <div className="flex justify-between mt-1 text-sm text-gray-500">
                   <span>무이자 0%</span>
                   <span>적정 3%</span>
                   <span>권장 5%</span>
@@ -171,11 +170,11 @@ const FriendLoanRequest = () => {
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">상환 기간</label>
+                <label className="block mb-1 font-semibold">상환 기간</label>
                 <select
                     value={duration}
                     onChange={e => setDuration(parseInt(e.target.value))}
-                    className="w-full border px-4 py-2 rounded-md"
+                    className="w-full px-4 py-2 border rounded-md"
                     >
                     {[3, 6, 12, 24, 36].map(month => (
                         <option key={month} value={month}>{month}개월</option>
@@ -189,29 +188,29 @@ const FriendLoanRequest = () => {
                         value={customDuration}
                         onChange={e => setCustomDuration(e.target.value)}
                         placeholder="개월 수 직접 입력"
-                        className="w-full mt-2 border px-3 py-2 rounded-md"
+                        className="w-full px-3 py-2 mt-2 border rounded-md"
                     />
                     )}
 
 
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="mt-1 text-sm text-gray-500">
                 상환일: <span className="font-medium">{formattedEndDate}</span>
                 </p>
 
                 </div>
 
               <div>
-                <label className="font-semibold block mb-1">요청 메시지 (선택사항)</label>
+                <label className="block mb-1 font-semibold">요청 메시지 (선택사항)</label>
                 <textarea
                   value={message}
                   onChange={e => setMessage(e.target.value)}
-                  className="w-full border px-4 py-2 rounded-md"
+                  className="w-full px-4 py-2 border rounded-md"
                   placeholder="친구에게 전달할 메시지를 입력해주세요"
                   maxLength={150}
                 />
               </div>
 
-              <div className="border-t pt-4 text-sm text-gray-700 space-y-1">
+              <div className="pt-4 space-y-1 text-sm text-gray-700 border-t">
                 <p>대출 금액 <strong>{amount ? `${parseInt(amount).toLocaleString()}원` : '0원'}</strong></p>
                 <p>연 이자율 <strong>{interest}%</strong></p>
                 <p>
@@ -225,12 +224,12 @@ const FriendLoanRequest = () => {
               </div>
 
               <div className="flex gap-3 mt-4">
-                <button className="w-1/2 py-2 rounded-md border text-gray-700 hover:bg-gray-100">
+                <button className="w-1/2 py-2 text-gray-700 border rounded-md hover:bg-gray-100">
                   임시저장
                 </button>
                 <button
                   onClick={() => setStep(2)}
-                  className="w-1/2 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                  className="w-1/2 py-2 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700"
                 >
                   다음 단계: 친구 선택
                 </button>
@@ -241,9 +240,9 @@ const FriendLoanRequest = () => {
           {/* STEP 2: 친구 선택 */}
           {step === 2 && (
             <>
-              <h3 className="text-lg font-semibold mb-2">대출을 요청할 친구를 선택하세요</h3>
+              <h3 className="mb-2 text-lg font-semibold">대출을 요청할 친구를 선택하세요</h3>
              {friendWallets.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">
+                <p className="py-4 text-sm text-center text-gray-500">
                     친구가 없습니다. 친구를 추가해보세요.
                 </p>
                 ) : (
@@ -251,7 +250,7 @@ const FriendLoanRequest = () => {
                     {friendWallets.map(friend => (
                       <li
                         key={friend.id}
-                        className="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 px-2 rounded"
+                        className="flex items-center justify-between px-2 py-3 rounded cursor-pointer hover:bg-gray-50"
                         onClick={() => handleCreateLoan(friend.wallet_id)}
                       >
                         <div className="flex items-center space-x-3">
@@ -272,7 +271,7 @@ const FriendLoanRequest = () => {
                 )}
 
               <button
-                className="mt-6 w-full py-2 rounded-md border text-gray-600 hover:bg-gray-100"
+                className="w-full py-2 mt-6 text-gray-600 border rounded-md hover:bg-gray-100"
                 onClick={() => setStep(1)}
               >
                 이전 단계로 돌아가기

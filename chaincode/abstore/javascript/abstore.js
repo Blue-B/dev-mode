@@ -161,13 +161,61 @@ const LoanShim = class {
   // ApproveLoanRequest: 개별 자금 대출 승인
   // args = [id]
   // =========================
+  // async ApproveLoanRequest(stub, args) {
+  //   if (args.length !== 1) {
+  //     throw new Error('Incorrect number of arguments. Expecting 1: [id]');
+  //   }
+  //   const id = args[0];
+
+  //   // 존재 여부 확인
+  //   let loanBytes = await stub.getState(id);
+  //   if (!loanBytes || loanBytes.length === 0) {
+  //     throw new Error(`loan request ${id} does not exist`);
+  //   }
+  //   let loan = JSON.parse(loanBytes.toString());
+
+  //   if (loan.status !== 'Pending') {
+  //     throw new Error(`loan request ${id} is not pending`);
+  //   }
+
+  //   // lender 지갑 조회 및 잔액 차감
+  //   let lenderWalletBytes = await stub.getState(loan.lender);
+  //   if (!lenderWalletBytes || lenderWalletBytes.length === 0) {
+  //     throw new Error(`lender wallet ${loan.lender} does not exist`);
+  //   }
+  //   let lenderWallet = JSON.parse(lenderWalletBytes.toString());
+  //   lenderWallet.balance -= loan.amount;
+  //   await stub.putState(loan.lender, Buffer.from(JSON.stringify(lenderWallet)));
+
+  //   // borrower 지갑 조회 및 잔액 증가
+  //   let borrowerWalletBytes = await stub.getState(loan.borrower);
+  //   if (!borrowerWalletBytes || borrowerWalletBytes.length === 0) {
+  //     throw new Error(`borrower wallet ${loan.borrower} does not exist`);
+  //   }
+  //   let borrowerWallet = JSON.parse(borrowerWalletBytes.toString());
+  //   borrowerWallet.balance += loan.amount;
+  //   await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
+
+  //   // 대출 상태 업데이트
+  //   loan.status = 'Active';
+  //   loan.startTime = Math.floor(Date.now() / 1000); 
+  //   // durationDays 이후(초 단위)
+  //   loan.endTime = Math.floor((Date.now() + durationDays * 24 * 60 * 60 * 1000) / 1000);
+
+  //   await stub.putState(id, Buffer.from(JSON.stringify(loan)));
+  //   return;
+  // }
+  // =========================
+  // ApproveLoanRequest: 개별 자금 대출 승인
+  // args = [id]
+  // =========================
   async ApproveLoanRequest(stub, args) {
     if (args.length !== 1) {
       throw new Error('Incorrect number of arguments. Expecting 1: [id]');
     }
     const id = args[0];
 
-    // 존재 여부 확인
+    // 1) 대출 요청 존재 여부 확인
     let loanBytes = await stub.getState(id);
     if (!loanBytes || loanBytes.length === 0) {
       throw new Error(`loan request ${id} does not exist`);
@@ -178,7 +226,7 @@ const LoanShim = class {
       throw new Error(`loan request ${id} is not pending`);
     }
 
-    // lender 지갑 조회 및 잔액 차감
+    // 2) lender 지갑 조회 및 잔액 차감
     let lenderWalletBytes = await stub.getState(loan.lender);
     if (!lenderWalletBytes || lenderWalletBytes.length === 0) {
       throw new Error(`lender wallet ${loan.lender} does not exist`);
@@ -187,7 +235,7 @@ const LoanShim = class {
     lenderWallet.balance -= loan.amount;
     await stub.putState(loan.lender, Buffer.from(JSON.stringify(lenderWallet)));
 
-    // borrower 지갑 조회 및 잔액 증가
+    // 3) borrower 지갑 조회 및 잔액 증가
     let borrowerWalletBytes = await stub.getState(loan.borrower);
     if (!borrowerWalletBytes || borrowerWalletBytes.length === 0) {
       throw new Error(`borrower wallet ${loan.borrower} does not exist`);
@@ -196,11 +244,12 @@ const LoanShim = class {
     borrowerWallet.balance += loan.amount;
     await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
 
-    // 대출 상태 업데이트
+    // 4) 대출 상태 업데이트
     loan.status = 'Active';
-    loan.startTime = Math.floor(Date.now() / 1000); 
-    // durationDays 이후(초 단위)
-    loan.endTime = Math.floor((Date.now() + durationDays * 24 * 60 * 60 * 1000) / 1000);
+    loan.startTime = Math.floor(Date.now() / 1000);
+
+    // ─── 여기서 durationDays 대신 loan.durationDays를 사용 ───
+    loan.endTime = Math.floor((Date.now() + loan.durationDays * 24 * 60 * 60 * 1000) / 1000);
 
     await stub.putState(id, Buffer.from(JSON.stringify(loan)));
     return;
