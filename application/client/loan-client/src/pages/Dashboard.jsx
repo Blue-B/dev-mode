@@ -10,6 +10,8 @@ import {
 import {v4 as uuidv4} from 'uuid';
 import {useAuth} from '../contexts/AuthContext';
 import {createClient} from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom'; 
+import { HandHeart, Send } from 'lucide-react';
 
 const supabase = createClient(
     process.env.REACT_APP_SUPABASE_URL,
@@ -40,6 +42,7 @@ const Dashboard = () => {
     const [loadingWallet, setLoadingWallet] = useState(true);
 
     const {user} = useAuth();
+    const navigate = useNavigate();
 
     // 로그인한 사용자 잔액 가져오기
     useEffect(() => {
@@ -278,7 +281,7 @@ const Dashboard = () => {
     // ); }
 
     return (
-        <div className="bg-white text-gray-800 p-10 text-[17px]">
+        <div className="bg-white text-gray-800 p-20 text-[17px] ">
             {/* 상단 카드 */}
             <div className="grid grid-cols-4 gap-4 mb-10">
                 <div className="p-6 border rounded-xl">
@@ -316,93 +319,38 @@ const Dashboard = () => {
             </div>
 
             {/* 대출 요청 섹션 */}
-            <div className="p-8 border rounded-xl mb-12">
-                <h2 className="text-xl font-semibold mb-6">새 대출 요청</h2>
-                <div className="grid grid-cols-2 gap-6">
-
-                    {/*lender는 고정값 (선택 불가 input으로 표시) */}
-                    <input type="text" value={walletAddress}
-                        // 로그인한 사용자의 지갑 주소
-                        disabled="disabled" className="border px-4 py-3 rounded-lg w-full text-lg bg-gray-100 text-gray-500"/> {/* borrower는 친구 목록 기반 옵션만 표시 */}
-                    <select
-                        value={newLoan.lender}
-                        onChange={(e) => setNewLoan({
-                            ...newLoan,
-                            lender: e.target.value
-                        })}
-                        className="border px-4 py-3 rounded-lg w-full text-lg">
-                        <option value="">빌려주는 사람 선택</option>
-                        {
-                            friendWallets.length > 0
-                                ? (friendWallets.map((friend) => (
-                                    <option key={friend.id} value={friend.wallet_id}>
-                                        {friend.name || '이름없음'}
-                                        ({friend.email})
-                                    </option>
-                                )))
-                                : (<option disabled="disabled">⚠ 지갑이 있는 친구가 없습니다</option>)
-                        }
-                    </select>
-
-                    <div className="flex items-center border rounded-lg px-4 py-3">
-                        <input
-                            type="number"
-                            value={newLoan.amount}
-                            onChange={(e) => setNewLoan({
-                                ...newLoan,
-                                amount: parseInt(e.target.value) || 0
-                            })}
-                            placeholder="대출 금액"
-                            className="flex-grow outline-none placeholder-gray-400 text-lg"/>
-                        <span className="text-gray-400 ml-2">KRW</span>
-                    </div>
-
-                    {/* 대출 기간 + 예정일 */}
-                    <div className="relative">
-                        <select
-                            value={selectedMonths}
-                            onChange={handleDurationChange}
-                            className="border px-4 py-3 rounded-lg w-full text-lg">
-                            <option value="">상환 기간 선택 (개월)</option>
-                            {
-                                durationOptions.map(
-                                    (month) => (<option key={month} value={month}>{month}개월</option>)
-                                )
-                            }
-                        </select>
-                        {
-                            calculatedEndDate && (
-                                <span className="absolute right-4 top-[13px] text-sm text-gray-500">
-                                    {
-                                        calculatedEndDate
-                                            .toISOString()
-                                            .split("T")[0]
-                                    }
-                                </span>
-                            )
-                        }
-                    </div>
-
-                    <div className="flex items-center border rounded-lg px-4 py-3">
-                        <input
-                            type="number"
-                            value={newLoan.interestRate}
-                            onChange={(e) => setNewLoan({
-                                ...newLoan,
-                                interestRate: parseInt(e.target.value) || 0
-                            })}
-                            placeholder="이자율"
-                            className="flex-grow outline-none placeholder-gray-400 text-lg"/>
-                        <span className="text-gray-400 ml-2">%</span>
-                    </div>
+            {/* 요청 강조 카드 */}
+            <div className="relative flex flex-col sm:flex-row items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-300 text-white rounded-2xl shadow-xl p-8 min-h-[220px] mb-10">
+            {/* 왼쪽 콘텐츠 */}
+            <div className="z-10 space-y-3 max-w-md">
+                {/* 아이콘 + 제목 */}
+                <div className="flex items-center space-x-3">
+                {/* <div className="bg-white bg-opacity-20 p-2 rounded-xl">
+                    <img src="/loan-icon.png" alt="loan icon" className="w-6 h-6" />
+                </div> */}
+                <h1 className="text-2xl font-semibold">친구에게 대출 요청</h1>
                 </div>
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button
-                        onClick={handleCreateLoan}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg">
-                        대출 요청 생성
-                    </button>
-                </div>
+
+                {/* 설명 텍스트 */}
+                <p className="text-ml leading-relaxed">
+                <span className="font-semibold">쉽고 빠르게</span> 친구에게 대출을 요청하세요.<br />
+                요청이 승인되면 즉시 대출이 진행됩니다.
+                </p>
+
+                {/* 버튼 */}
+                <button
+                onClick={() => navigate('/dashboard/request')}
+                className="mt-2 inline-flex items-center bg-white text-blue-700 px-7 py-3 rounded-lg font-semibold shadow hover:bg-gray-100 transition"
+                >
+                <Send size={16} className="mr-2" />
+                친구 대출 요청하기
+                </button>
+            </div>
+
+            {/* 오른쪽 큰 아이콘 */}
+            <div className="absolute right-6 bottom-6 opacity-30 hidden sm:block">
+                <HandHeart size={60} />
+            </div>
             </div>
 
             {/* 최근 활동 */}
