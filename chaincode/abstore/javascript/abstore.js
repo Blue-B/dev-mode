@@ -4,6 +4,7 @@ const shim = require('fabric-shim');
 const util = require('util');
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 const LoanShim = class {
 
   // =========================
@@ -821,6 +822,99 @@ class LoanContract {
             }
         }
 
+=======
+// Wallet class equivalent to Go's Wallet struct
+class Wallet {
+    constructor(address, balance, createdAt) {
+        this.address = address;
+        this.balance = balance;
+        this.createdAt = createdAt;
+    }
+}
+
+// LoanRequest class equivalent to Go's LoanRequest struct
+class LoanRequest {
+    constructor(id, poolId, lender, borrower, amount, durationDays, interestRate, status, startTime, endTime) {
+        this.id = id;
+        this.poolId = poolId;
+        this.lender = lender;
+        this.borrower = borrower;
+        this.amount = amount;
+        this.durationDays = durationDays;
+        this.interestRate = interestRate;
+        this.status = status;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+}
+
+// Pool class equivalent to Go's Pool struct
+class Pool {
+    constructor(id, name, minDeposit, interestRate, startTime, endTime, totalDeposit, totalInterest, status, participants, weights) {
+        this.id = id;
+        this.name = name;
+        this.minDeposit = minDeposit;
+        this.interestRate = interestRate;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.totalDeposit = totalDeposit;
+        this.totalInterest = totalInterest;
+        this.status = status;
+        this.participants = participants;
+        this.weights = weights;
+    }
+}
+
+// LoanContract chaincode class
+class LoanContract {
+    // Initialize the chaincode
+    async Init(stub) {
+        console.info('=========== Instantiated LoanContract chaincode ===========');
+        return shim.success();
+    }
+
+    // Invoke function to handle transactions
+    async Invoke(stub) {
+        let ret = stub.getFunctionAndParameters();
+        console.info(ret);
+        let method = this[ret.fcn];
+        if (!method) {
+            console.error('no function of name:' + ret.fcn + ' found');
+            return shim.error(new Error('no function of name:' + ret.fcn + ' found'));
+        }
+        try {
+            let payload = await method(stub, ret.params);
+            return shim.success(payload);
+        } catch (err) {
+            console.error(err);
+            return shim.error(err);
+        }
+    }
+
+    // Create a new wallet
+    async CreateWallet(stub, args) {
+        if (args.length !== 2) {
+            throw new Error('Incorrect number of arguments. Expecting 2: address, initialBalance');
+        }
+        let address = args[0];
+        let initialBalance = args[1];
+
+        // Check if wallet already exists
+        let walletData = await stub.getState(address);
+        if (walletData && walletData.length > 0) {
+            throw new Error(`Wallet ${address} already exists`);
+        }
+
+        // Convert initial balance to integer
+        let balance = 0;
+        if (initialBalance) {
+            balance = parseInt(initialBalance);
+            if (isNaN(balance)) {
+                throw new Error('Invalid initial balance');
+            }
+        }
+
+>>>>>>> Stashed changes
         let wallet = new Wallet(address, balance, Math.floor(Date.now() / 1000));
         let walletJSON = JSON.stringify(wallet);
         await stub.putState(address, Buffer.from(walletJSON));
@@ -1308,5 +1402,9 @@ class LoanContract {
 }
 
 // Start the chaincode
+<<<<<<< Updated upstream
+shim.start(new LoanContract());
+>>>>>>> Stashed changes
+=======
 shim.start(new LoanContract());
 >>>>>>> Stashed changes
