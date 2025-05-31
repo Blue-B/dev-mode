@@ -333,7 +333,7 @@ const Dashboard = () => {
                     </p>
                     <button
                         className="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold shadow-md hover:bg-gray-100"
-                        onClick={() => navigate('/loanpool/request')}
+                        onClick={() => navigate('/dashboard/request')}
                     >
                         친구 대출 요청하기
                     </button>
