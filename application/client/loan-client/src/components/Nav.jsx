@@ -34,7 +34,7 @@ const Nav = () => {
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error) throw error;
         if (user) {
-          // 이름과 지갑주소 조회
+          // 지갑주소 조회
           const { data: profile, error: profErr } = await supabase
             .from("profiles")
             .select("wallet_id, name")

@@ -19,7 +19,8 @@ import Inquiry from "./pages/Inquiry";
 import Question from "./pages/Question";
 import EnsuringStability from "./pages/Ensuring-Stability";
 import Error from "./pages/Error";
-import FriendLoanRequest from "./pages/FriendLoanRequest"; 
+import FriendLoanRequest from "./pages/FriendLoanRequest";
+
 
 // 보호된 라우트 컴포넌트: 로그인한 사용자만 접근 가능
 const ProtectedRoute = ({ children }) => {
@@ -99,6 +100,18 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/dashboard/request"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <FriendLoanRequest />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/mypage"
             element={
