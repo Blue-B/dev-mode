@@ -21,7 +21,7 @@ const supabase = createClient(
 );
 
 const Nav = () => {
-  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [balance, setBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(true);
@@ -34,16 +34,19 @@ const Nav = () => {
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error) throw error;
         if (user) {
-          setUserEmail(user.email);
           // 지갑주소 조회
           const { data: profile, error: profErr } = await supabase
             .from("profiles")
-            .select("wallet_id")
+            .select("wallet_id, name")
             .eq("id", user.id)
             .single();
           if (profErr) throw profErr;
           if (profile?.wallet_id) {
             setWalletAddress(profile.wallet_id);
+          }
+
+          if (profile?.name) {
+            setUserName(profile.name);
           }
         }
       } catch (err) {
@@ -96,7 +99,7 @@ const Nav = () => {
         <div className="flex items-center mb-6">
           <img src={avatar} alt="avatar" className="w-12 h-12 rounded-full mr-4" />
           <div>
-            <div className="text-base">{userEmail || "Guest"}</div>
+            <div className="text-base">{userName || "Guest"}</div>
             <div className="text-sm text-gray-500">
               잔액: {loadingWallet ? "로딩중…" : `${balance.toLocaleString()} KRW`}
             </div>
