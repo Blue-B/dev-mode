@@ -5,6 +5,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 const axios = require('axios');
+const crypto = require('crypto');  // crypto 모듈 추가
 require('dotenv').config();  // .env에서 SUPABASE 설정 불러오기
 
 const express = require('express');
@@ -214,11 +215,11 @@ app.get('/createLoan', async function (req, res) {
 
     // 체인 호출 성공 → Supabase에 저장
     const { error } = await supabase.from('loans').insert([{
-      id: crypto.randomUUID(),           // 오프체인용 고유 ID
-      loan_chain_id: id,                 // 체인에 저장한 loan ID
-      tx_hash: txId,                     // 블록체인 트랜잭션 ID
+      id: id,                    // 체인에 저장한 loan ID를 그대로 사용
+      loan_chain_id: id,         // 체인에 저장한 loan ID
+      tx_hash: txId,             // 블록체인 트랜잭션 ID
       created_at: new Date().toISOString(),
-      pool_id: null                      // pool 없는 경우 null
+      pool_id: null              // pool 없는 경우 null
     }]);
 
     if (error) {
@@ -537,6 +538,30 @@ async function verifyRecaptcha(token) {
     return false;
   }
 }
+
+// 이메일 확인 API
+app.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Supabase에서 사용자 확인
+    const { data: { users }, error } = await supabase.auth.admin.listUsers();
+    if (error) throw error;
+    
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      return res.json({ exists: false });
+    }
+    
+    return res.json({
+      exists: true,
+      provider: user.app_metadata.provider || 'email'
+    });
+  } catch (error) {
+    console.error('이메일 확인 에러:', error);
+    res.status(500).json({ error: '이메일 확인 중 오류가 발생했습니다.' });
+  }
+});
 
 // 서버 시작
 app.listen(PORT, HOST);

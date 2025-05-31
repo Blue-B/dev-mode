@@ -3,12 +3,23 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { createWallet, getWalletBalance } from '../services/api';
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
+// 이메일 확인 함수
+const checkEmailProvider = async (email) => {
+  try {
+    const response = await axios.post('http://localhost:8001/check-email', { email });
+    return response.data;
+  } catch (error) {
+    console.error('이메일 확인 API 호출 실패:', error);
+    throw error;
+  }
+};
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -16,7 +27,11 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [emailChecked, setEmailChecked] = useState(false);
+  const [emailInfo, setEmailInfo] = useState(null);
+  const [isEmailAvailable, setIsEmailAvailable] = useState(false);
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -35,19 +50,19 @@ const Signup = () => {
     const initializeFormData = async () => {
       try {
         // 현재 로그인된 사용자 정보 가져오기
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (userError) throw userError;
+        if (sessionError) throw sessionError;
 
-        if (user) {
-          console.log('현재 로그인된 사용자:', user);
+        if (session?.user) {
+          console.log('현재 로그인된 사용자:', session.user);
           setIsGoogleUser(true);
 
           // 이미 DB에 프로필이 존재하는지 확인
           const { data: existingProfile, error: profileError } = await supabase
             .from('profiles')
             .select('id')
-            .eq('id', user.id)
+            .eq('id', session.user.id)
             .single();
 
           if (profileError && profileError.code !== 'PGRST116') {
@@ -60,18 +75,18 @@ const Signup = () => {
             return;
           }
 
-          // 프로필 없으면 → 폼 초기값 설정 후 Step3부터 시작
+          // 프로필 없으면 → 폼 초기값 설정 후 Step1부터 시작
           setFormData(prev => ({
             ...prev,
-            email: user.email,
-            phone: user.user_metadata?.phone || '',
-            address: user.user_metadata?.address || '',
-            birthDate: user.user_metadata?.birthdate || '',
-            gender: user.user_metadata?.gender || '',
-            terms: user.user_metadata?.terms || false
+            email: session.user.email,
+            phone: session.user.user_metadata?.phone || '',
+            address: session.user.user_metadata?.address || '',
+            birthDate: session.user.user_metadata?.birthdate || '',
+            gender: session.user.user_metadata?.gender || '',
+            terms: session.user.user_metadata?.terms || false
           }));
-          // 구글 사용자는 이메일/비밀번호 단계 건너뛰기
-          setCurrentStep(3);
+          // 구글 사용자는 Step1부터 시작
+          setCurrentStep(1);
         }
       } catch (error) {
         console.error('사용자 정보 초기화 에러:', error);
@@ -81,25 +96,75 @@ const Signup = () => {
     initializeFormData();
   }, []);
 
+  // 이메일 확인 처리
+  const handleEmailCheck = async () => {
+    try {
+      if (!formData.email) {
+        setErrors({ email: '이메일을 입력해주세요' });
+        setIsEmailAvailable(false);
+        return;
+      }
+
+      if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)) {
+        setErrors({ email: '올바른 이메일 형식이 아닙니다' });
+        setIsEmailAvailable(false);
+        return;
+      }
+
+      const result = await checkEmailProvider(formData.email);
+      setEmailInfo(result);
+      setEmailChecked(true);
+      
+      if (result.exists) {
+        if (result.provider === 'google') {
+          setErrors({ email: '이 이메일은 Google로 가입된 계정입니다.' });
+        } else {
+          setErrors({ email: '이미 가입된 이메일입니다.' });
+        }
+        setIsEmailAvailable(false);
+      } else {
+        setErrors({}); // 에러 메시지 초기화
+        setIsEmailAvailable(true);
+      }
+    } catch (error) {
+      console.error('이메일 확인 실패:', error);
+      setErrors({ email: '이메일 확인 중 오류가 발생했습니다.' });
+      setIsEmailAvailable(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // 이메일이 변경되면 이메일 확인 상태 초기화
+    if (name === 'email') {
+      setEmailChecked(false);
+      setEmailInfo(null);
+      setIsEmailAvailable(false);
+    }
   };
 
   const handleNext = () => {
-    // 현재 단계에 따른 유효성 검사
     const newErrors = {};
 
     switch (currentStep) {
-      case 1: // 이메일 입력 단계
+      case 1: // 이름과 이메일 입력 단계
+        if (!formData.name) {
+          newErrors.name = '이름을 입력해주세요';
+        }
         if (!isGoogleUser) {
           if (!formData.email) {
             newErrors.email = '이메일을 입력해주세요';
           } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email)) {
             newErrors.email = '올바른 이메일 형식이 아닙니다';
+          } else if (!emailChecked) {
+            newErrors.email = '이메일 확인이 필요합니다';
+          } else if (!isEmailAvailable) {
+            newErrors.email = '사용할 수 없는 이메일입니다';
           }
         }
         break;
@@ -141,9 +206,13 @@ const Signup = () => {
 
     setErrors(newErrors);
 
-    // 에러가 없으면 다음 단계로 진행
     if (Object.keys(newErrors).length === 0) {
-      setCurrentStep(prev => prev + 1);
+      if (isGoogleUser && currentStep === 1) {
+        // 구글 사용자는 이름 입력 후 바로 생년월일 단계로
+        setCurrentStep(3);
+      } else {
+        setCurrentStep(prev => prev + 1);
+      }
     }
   };
 
@@ -160,7 +229,7 @@ const Signup = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoading(true);
 
     let userId;
@@ -174,7 +243,7 @@ const Signup = () => {
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
-              name: formData.email.split('@')[0],
+              name: formData.name,
               birth_number: formatBirthNumber(formData.birthDate),
               gender: formData.gender,
               phone: formData.phone,
@@ -192,7 +261,7 @@ const Signup = () => {
           .insert([
             {
               id: authData.user.id,
-              name: formData.email.split('@')[0],
+              name: formData.name,
               birth_number: formatBirthNumber(formData.birthDate),
               gender: formData.gender,
               phone: formData.phone,
@@ -221,7 +290,7 @@ const Signup = () => {
           .upsert([
             {
               id: user.id,
-              name: formData.email.split('@')[0],
+              name: formData.name,
               birth_number: formatBirthNumber(formData.birthDate),
               gender: formData.gender,
               phone: formData.phone,
@@ -350,44 +419,83 @@ const Signup = () => {
 
     switch (currentStep) {
       case 1:
-        return !isGoogleUser ? (
-          <motion.div
-            key="step1"
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="text-center"
-          >
-            <h2 className="text-2xl font-bold mb-8">이메일을 입력해주세요</h2>
-            <div className="space-y-4">
+        return (
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-8">
+              {isGoogleUser ? '이름을 입력해주세요' : '이름과 이메일을 입력해주세요'}
+            </h2>
+            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                <label className="block text-sm font-medium text-gray-700">이름</label>
                 <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="example@email.com"
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="이름을 입력하세요"
                 />
-                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                {errors.name && (
+                  <p className="mt-2 text-sm text-red-600">{errors.name}</p>
+                )}
               </div>
+              {!isGoogleUser && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">이메일</label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="flex-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="이메일을 입력하세요"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleEmailCheck}
+                      className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      확인
+                    </button>
+                  </div>
+                  {errors.email && (
+                    <p className="mt-2 text-sm text-red-600">{errors.email}</p>
+                  )}
+                  {emailChecked && !errors.email && isEmailAvailable && (
+                    <p className="mt-2 text-sm text-green-600">사용 가능한 이메일입니다.</p>
+                  )}
+                  {emailChecked && emailInfo?.exists && emailInfo?.provider === 'google' && (
+                    <div className="mt-2 p-4 bg-yellow-50 rounded-lg">
+                      <p className="text-sm text-yellow-700">
+                        이 이메일은 Google로 가입된 계정입니다. Google 로그인을 사용해주세요.
+                      </p>
+                      <button
+                        onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}
+                        className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Google로 로그인
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="mt-8"
-            >
+            <div className="mt-8">
               <button
                 onClick={handleNext}
-                className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
+                className={`px-8 py-3 rounded-lg font-semibold transition duration-200 ${
+                  !isGoogleUser && !isEmailAvailable && emailChecked
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+                disabled={!isGoogleUser && !isEmailAvailable && emailChecked}
               >
                 다음
               </button>
-            </motion.div>
-          </motion.div>
-        ) : null;
+            </div>
+          </div>
+        );
 
       case 2:
         return !isGoogleUser ? (
@@ -598,6 +706,10 @@ const Signup = () => {
               className="bg-gray-50 rounded-xl p-6 space-y-4 text-left"
             >
               <div className="flex justify-between items-center">
+                <span className="text-gray-600">이름</span>
+                <span className="font-medium">{formData.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-gray-600">이메일</span>
                 <span className="font-medium">{formData.email}</span>
               </div>
@@ -652,7 +764,7 @@ const Signup = () => {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="max-w-md w-full relative">
-        {currentStep > 1 && (
+        {currentStep > 1 && (currentStep !== 3 || !isGoogleUser) && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
