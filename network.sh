@@ -10,6 +10,11 @@ function runCAdev() {
  basic-network/scripts/runCAdev.sh
 }
 
+function runCAOrg3() {
+ # CA dev 생성
+ basic-network/scripts/runCAOrg3.sh
+}
+
 function cleanNetwork() {
  # 네트워크 전부 삭제
  basic-network/scripts/cleanNetwork.sh
@@ -31,7 +36,7 @@ function joinChannel() {
 
 function installCC() {
  # 체인코드 설치
- docker exec cli scripts/installCC.sh $1 $2 $3 $4
+ docker exec cli scripts/installCC.sh $1 $2
 }
 
 function checkCC() {
@@ -48,12 +53,6 @@ function upgradeCC() {
  # 체인코드 업그레이드
  docker exec cli scripts/upgradeCC.sh $1 $2
 }
-
-function runCAOrg3() {
- # CA dev 생성
- basic-network/scripts/runCAOrg3.sh
-}
-
 if [ "$1" == "generateCert" ]; then
  generateCert $2
 elif [ "$1" == "createConfigtxgen" ]; then
@@ -70,36 +69,48 @@ elif [ "$1" == "updateAnchor" ]; then
  joinChannel updateAnchor
 elif [ "$1" == "updateAnchorProd" ]; then
  joinChannel updateAnchorProd
-
 elif [ "$1" == "installCC" ]; then
- installCC $2
+ installCC $2 $3
 elif [ "$1" == "checkCC" ]; then
  checkCC $2
 elif [ "$1" == "runCAdev" ]; then
  runCAdev
+elif [ "$1" == "runCAOrg3" ]; then
+ runCAOrg3
 elif [ "$1" == "startSDK" ]; then
  startSDK
 elif [ "$1" == "upgradeCC" ]; then
  upgradeCC $2 $3
 elif [ "$1" == "clean" ]; then
  cleanNetwork
-elif [ "$1" == "start" ]; then
- generateCert
+elif [ "$1" == "dev" ]; then
+ generateCert dev
  sleep 2
- createConfigtxgen
+ createConfigtxgen dev
  sleep 2
- upNetwork org1peer0 orderer
+ upNetwork dev
  sleep 2
  joinChannel createChannel
  joinChannel joinChannel
  joinChannel updateAnchor
  sleep 2
  runCAdev
-elif [ "$1" == "runCAOrg3" ]; then
+elif [ "$1" == "prod" ]; then
+ generateCert prod
+ sleep 2
  runCAOrg3
-
+ sleep 2
+ createConfigtxgen prod
+ sleep 2
+ upNetwork prod
+ sleep 2
+ sleep 2
+ joinChannel createChannel
+ joinChannel joinChannelProd
+ joinChannel updateAnchorProd
+ sleep 2
+ runCAdev
 else
  echo -n "unknown parameter"
  exit 1
 fi
-
