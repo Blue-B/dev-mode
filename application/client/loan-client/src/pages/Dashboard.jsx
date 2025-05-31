@@ -11,7 +11,7 @@ import {v4 as uuidv4} from 'uuid';
 import {useAuth} from '../contexts/AuthContext';
 import {createClient} from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom'; 
-import { HandHeart, Send } from 'lucide-react';
+import { HandHeart } from 'lucide-react';
 
 const supabase = createClient(
     process.env.REACT_APP_SUPABASE_URL,
@@ -321,19 +321,19 @@ const Dashboard = () => {
 
             {/* 대출 요청 섹션 */}
             {/* 요청 강조 카드 */}
-            <div className="relative flex flex-col sm:flex-row items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-300 text-white rounded-2xl shadow-xl p-8 min-h-[220px] mb-10">
+            <div className="relative flex items-center justify-between bg-gradient-to-r from-blue-500 to-purple-400 text-white rounded-2xl shadow-xl p-8 min-h-[220px] mb-10 overflow-hidden">
             {/* 왼쪽 콘텐츠 */}
             <div className="z-10 space-y-3 max-w-md">
                 {/* 아이콘 + 제목 */}
-                <div className="flex items-center space-x-3">
-                {/* <div className="bg-white bg-opacity-20 p-2 rounded-xl">
-                    <img src="/loan-icon.png" alt="loan icon" className="w-6 h-6" />
-                </div> */}
-                <h1 className="text-2xl font-semibold">친구에게 대출 요청</h1>
+                <div className="flex items-center space-x-3 mb-3">
+                <div className="bg-white p-2 rounded-xl flex items-center justify-center shadow-md w-12 h-12">
+                    <img src={'/dashboard_1.png'} alt="친구에게 대출 요청 아이콘" className="w-8 h-8" />
+                </div>
+                <h1 className="text-xl font-semibold">친구에게 대출 요청</h1>
                 </div>
 
                 {/* 설명 텍스트 */}
-                <p className="text-ml leading-relaxed">
+                <p className="text-base leading-relaxed opacity-90">
                 <span className="font-semibold">쉽고 빠르게</span> 친구에게 대출을 요청하세요.<br />
                 요청이 승인되면 즉시 대출이 진행됩니다.
                 </p>
@@ -341,16 +341,16 @@ const Dashboard = () => {
                 {/* 버튼 */}
                 <button
                 onClick={() => navigate('/dashboard/request')}
-                className="mt-2 inline-flex items-center bg-white text-blue-700 px-7 py-3 rounded-lg font-semibold shadow hover:bg-gray-100 transition"
+                className="mt-6 inline-flex items-center bg-white text-blue-700 px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-gray-100 transition transform hover:scale-105 mb-6"
                 >
-                <Send size={16} className="mr-2" />
+                <img src={'/dashboard_2.png'} alt="대출 요청 아이콘" className="w-5 h-5 mr-2" />
                 친구 대출 요청하기
                 </button>
             </div>
 
             {/* 오른쪽 큰 아이콘 */}
-            <div className="absolute right-6 bottom-6 opacity-30 hidden sm:block">
-                <HandHeart size={60} />
+            <div className="absolute right-6 bottom-6 opacity-40 text-white hidden md:block">
+                <HandHeart size={80} />
             </div>
             </div>
 

@@ -44,7 +44,6 @@ const Nav = () => {
           if (profile?.wallet_id) {
             setWalletAddress(profile.wallet_id);
           }
-
           if (profile?.name) {
             setUserName(profile.name);
           }
