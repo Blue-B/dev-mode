@@ -9,7 +9,7 @@ const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
-
+// 임차인이랑 차입자 바뀜, 자금 유동이 안됨
 const FriendLoanRequest = () => {
   const navigate = useNavigate();
   const {user} = useAuth();

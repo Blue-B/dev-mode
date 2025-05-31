@@ -45,7 +45,6 @@ const LoanShim = class {
     }
   }
 
-
   // =========================
   // CreateWallet: 지갑 생성
   // args = [address, initialBalance]
@@ -583,7 +582,7 @@ const LoanShim = class {
     return;
   }
 
-    // =========================
+  // =========================
   // ApproveLoanRequest: 개별 자금 대출 승인
   // args = [id]
   // =========================
