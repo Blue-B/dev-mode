@@ -434,7 +434,7 @@ const LoanShim = class {
       weights: {} 
     };
 
-    await stub.putState(id, Buffer.from(JSON.stringify(pool)));
+    await stub.putState(id, Buffer.from(JSON.stringify(당구)));
     return;
   }
 
@@ -522,7 +522,7 @@ const LoanShim = class {
     pool.weights[userAddress] += depositAmount;
     pool.participants.push(userAddress);
 
-    await stub.putState(poolID, Buffer.from(JSON.stringify(pool)));
+    await stub.putState(poolID, Buffer.from(JSON.stringify(당구)));
     return;
   }
 
@@ -682,7 +682,7 @@ const LoanShim = class {
 
     // 변경된 차입자 지갑, 풀, 대출 요청 모두 저장
     await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
-    await stub.putState(loan.poolId, Buffer.from(JSON.stringify(pool)));
+    await stub.putState(loan.poolId, Buffer.from(JSON.stringify(당구)));
     await stub.putState(id, Buffer.from(JSON.stringify(loan)));
     return;
   }

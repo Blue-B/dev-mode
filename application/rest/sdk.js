@@ -53,13 +53,26 @@ async function send(type, func, args) {
     }
 
   } catch (error) {
-
-        // 4) 에러 발생 시: 에러 메시지와 전체 스택
+    // Fabric SDK의 endorsement 오류에는 `error.responses` 배열이 존재할 수 있습니다.
+    // peer가 반환한 payload(buffer)에 실제 체인코드 오류 메시지가 들어있으므로, 이를 toString() 해 봅니다.
     console.error(`🚨 ${func} 에러 발생 →`, error.message);
-    console.error(error);
-    
+
+    // Peer별로 반환된 페이로드가 있으면 출력해 줍니다.
+    if (error.responses) {
+      for (const resp of error.responses) {
+        if (resp.response && resp.response.payload) {
+          const payloadBuffer = resp.response.payload;
+          console.error('🚨 체인코드 에러 페이로드 (peer):', resp.peer);
+          console.error('🚨 페이로드 버퍼 →', payloadBuffer);
+          // 버퍼를 문자열로 디코드
+          console.error('🚨 페이로드 메시지 텍스트 →', payloadBuffer.toString());
+        }
+      }
+    }
+
+    // 최종적으로 에러를 호출자에게 던집니다.
     throw new Error(`send() 오류: ${error.message}`);
-  }
+  } 
 }
 
 module.exports = { send };
