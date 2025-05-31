@@ -20,7 +20,6 @@ const FriendLoanRequest = () => {
   const [duration, setDuration] = useState(12);
   const [customDuration, setCustomDuration] = useState('');
 
-  const [receiver, setReceiver] = useState('');
   const [message, setMessage] = useState('');
   const [step, setStep] = useState(1); // 1: 대출 조건, 2: 친구 선택
   const [friendWallets, setFriendWallets] = useState([]);
@@ -71,14 +70,14 @@ const FriendLoanRequest = () => {
 
 
   // 대출 요청 생성
-  const handleCreateLoan = async (borrowerWalletId) => {
+  const handleCreateLoan = async (lenderWalletId) => {
     try {
-      if (!userWalletAddress || !borrowerWalletId || !amount || !duration || !interest) {
+      if (!userWalletAddress || !lenderWalletId || !amount || !duration || !interest) {
         alert('모든 필드를 입력해주세요.');
         return;
       }
 
-      if (userWalletAddress === borrowerWalletId) {
+      if (userWalletAddress === lenderWalletId) {
         alert('대출자와 차입자는 같은 지갑일 수 없습니다.');
         return;
       }
@@ -89,8 +88,8 @@ const FriendLoanRequest = () => {
 
       const loanData = {
         id: loanId,
-        lender: userWalletAddress,
-        borrower: borrowerWalletId,
+        lender: lenderWalletId,  // 빌려주는 사람
+        borrower: userWalletAddress,  // 채무자
         amount: parseInt(amount),
         interestRate: parseFloat(interest),
         durationDays: months * 30,
