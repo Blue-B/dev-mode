@@ -148,9 +148,9 @@ app.post('/wallet/create', async (req, res) => {
     console.log('[wallet/create] 3) 체인코드 응답 →', chainResponse.data);
 
     // 체인코드에서 “Success” 이외의 응답이 오면 에러 처리
-    if (chainResponse.data !== 'Success') {
-      console.error('[wallet/create] 체인코드 응답이 Success가 아닙니다:', chainResponse.data);
-      return res.status(500).json({ error: '블록체인 지갑 생성 실패', detail: chainResponse.data });
+    if (!chainResponse.data) {
+      // data 필드가 없거나 빈 값일 경우만 실패 처리
+      return res.status(500).json({ error: '블록체인 지갑 생성 실패' });
     }
   } catch (err) {
     console.error('[wallet/create] 체인코드 호출 중 예외 발생 →', err.message);
@@ -220,17 +220,6 @@ app.get('/getWalletBalance', async function (req, res) {
 // ================= 대출 시스템 API ==================
 
 // 대출 요청 생성
-// app.get('/createLoan', async function (req, res) {
-//   const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
-//   const args = [id, lender, borrower, amount, durationDays, interestRate];
-
-//   try {
-//     const result = await sdk.send(false, 'CreateLoanRequest', args);
-//     return res.json(result);
-//   } catch (err) {
-//     return res.status(500).json({ error: err.message });
-//   }
-// });
 app.get('/createLoan', async function (req, res) {
   const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
   const args = [id, lender, borrower, amount, durationDays, interestRate];
@@ -262,8 +251,6 @@ app.get('/createLoan', async function (req, res) {
 
 // 대출 승인
 // GET /approveLoan?id=<loanId>
-// server.js 의 /approveLoan 라우트 수정 예시
-
 app.get('/approveLoan', async (req, res) => {
   const { id: loanId } = req.query;
   if (!loanId) {
