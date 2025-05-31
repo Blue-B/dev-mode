@@ -583,17 +583,17 @@ const LoanShim = class {
     return;
   }
 
-    // =========================
-  // ApproveLoanRequest: 개별 자금 대출 승인
+  // =========================
+  // ApproveLoanRequestFromPool: 풀 자금 대출 승인
   // args = [id]
   // =========================
-  async ApproveLoanRequest(stub, args) {
+  async ApproveLoanRequestFromPool(stub, args) {
     if (args.length !== 1) {
       throw new Error('Incorrect number of arguments. Expecting 1: [id]');
     }
     const id = args[0];
 
-    // 존재 여부 확인
+    // 대출 요청 조회
     let loanBytes = await stub.getState(id);
     if (!loanBytes || loanBytes.length === 0) {
       throw new Error(`loan request ${id} does not exist`);
@@ -601,17 +601,22 @@ const LoanShim = class {
     let loan = JSON.parse(loanBytes.toString());
 
     if (loan.status !== 'Pending') {
-      throw new Error(`loan request ${id} is not pending`);
+      throw new Error(`loan ${id} is not pending`);
     }
 
-    // lender 지갑 조회 및 잔액 차감
-    let lenderWalletBytes = await stub.getState(loan.lender);
-    if (!lenderWalletBytes || lenderWalletBytes.length === 0) {
-      throw new Error(`lender wallet ${loan.lender} does not exist`);
+    // 풀 조회
+    let poolBytes = await stub.getState(loan.poolId);
+    if (!poolBytes || poolBytes.length === 0) {
+      throw new Error(`pool ${loan.poolId} does not exist`);
     }
-    let lenderWallet = JSON.parse(lenderWalletBytes.toString());
-    lenderWallet.balance -= loan.amount;
-    await stub.putState(loan.lender, Buffer.from(JSON.stringify(lenderWallet)));
+    let pool = JSON.parse(poolBytes.toString());
+
+    if (pool.totalDeposit < loan.amount) {
+      throw new Error(`pool ${loan.poolId} has insufficient funds`);
+    }
+
+    // 풀 자금 차감
+    pool.totalDeposit -= loan.amount;
 
     // borrower 지갑 조회 및 잔액 증가
     let borrowerWalletBytes = await stub.getState(loan.borrower);
@@ -620,15 +625,15 @@ const LoanShim = class {
     }
     let borrowerWallet = JSON.parse(borrowerWalletBytes.toString());
     borrowerWallet.balance += loan.amount;
-    await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
 
     // 대출 상태 업데이트
     loan.status = 'Active';
     loan.startTime = Math.floor(Date.now() / 1000);
-
-    // ❗ 여기에서 durationDays 대신 loan.durationDays로 참조해야 합니다.
     loan.endTime = Math.floor((Date.now() + loan.durationDays * 24 * 60 * 60 * 1000) / 1000);
 
+    // 변경된 풀과 차입자 지갑, 대출 요청 모두 저장
+    await stub.putState(loan.poolId, Buffer.from(JSON.stringify(pool)));
+    await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
     await stub.putState(id, Buffer.from(JSON.stringify(loan)));
     return;
   }
