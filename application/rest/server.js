@@ -30,9 +30,10 @@ console.log("✅ SERVICE_ROLE_KEY 시작:", process.env.SUPABASE_SERVICE_ROLE_KE
 
 // CORS 설정 추가
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:8001', 'http://127.0.0.1:3000', 'http://127.0.0.1:8001'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  origin: ['http://localhost:3000', 'http://localhost:8001', 'http://127.0.0.1:3000', 'http://127.0.0.1:8001', 'http://0.0.0.0:3000', 'http://0.0.0.0:8001'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   credentials: true,
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -43,7 +44,7 @@ app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "connect-src 'self' http://localhost:* https://*.supabase.co https://www.google.com https://www.gstatic.com; " +
+    "connect-src 'self' http://localhost:* http://127.0.0.1:* http://0.0.0.0:* https://*.supabase.co https://www.google.com https://www.gstatic.com; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; " +
     "frame-src 'self' https://www.google.com; " +
     "style-src 'self' 'unsafe-inline'; " +
@@ -213,7 +214,12 @@ app.get('/getWalletBalance', async function (req, res) {
     const result = await sdk.send(true, 'GetWalletBalance', [address]);
     return res.json(result);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('[getWalletBalance] 에러 발생:', err);
+    return res.status(500).json({ 
+      error: err.message,
+      details: err.stack,
+      type: err.name
+    });
   }
 });
 
@@ -686,6 +692,44 @@ app.post('/check-email', async (req, res) => {
   }
 });
 
+// ================= 지갑 동기화 함수 ==================
+// 서버 시작 시 DB의 모든 지갑을 체인코드에 복구
+async function syncWalletsToChaincode() {
+  try {
+    const { data: profiles, error } = await supabase.from('profiles').select('wallet_id');
+    if (error) {
+      console.error('지갑 동기화 실패:', error);
+      return;
+    }
+    for (const profile of profiles) {
+      if (profile.wallet_id) {
+        try {
+          // 체인코드에 지갑 생성 요청 (이미 있으면 에러 무시)
+          await axios.get(`http://localhost:${PORT}/chain/createWallet`, {
+            params: {
+              address: profile.wallet_id,
+              initialBalance: 1000000 // 필요에 따라 0 또는 DB 잔액으로 변경 가능
+            }
+          });
+          console.log('체인코드에 지갑 동기화:', profile.wallet_id);
+        } catch (err) {
+          if (err.response && err.response.data && err.response.data.error?.includes('already exists')) {
+            // 이미 존재하면 무시
+            console.log('이미 존재하는 지갑:', profile.wallet_id);
+          } else {
+            console.error('지갑 동기화 중 에러:', profile.wallet_id, err.message);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('지갑 동기화 전체 실패:', e);
+  }
+}
+
 // 서버 시작
-app.listen(PORT, HOST);
-console.log(`서버 시작중 => http://${HOST}:${PORT}/`);
+app.listen(PORT, HOST, async () => {
+  console.log(`서버 시작중 => http://${HOST}:${PORT}/`);
+  // 서버 시작 직후 동기화 실행
+  await syncWalletsToChaincode();
+});

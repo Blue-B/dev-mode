@@ -13,7 +13,16 @@ const supabase = createClient(
 // 이메일 확인 함수
 const checkEmailProvider = async (email) => {
   try {
-    const response = await axios.post('http://localhost:8001/check-email', { email });
+    const response = await axios.post('http://localhost:8001/check-email', 
+      { email },
+      {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
     return response.data;
   } catch (error) {
     console.error('이메일 확인 API 호출 실패:', error);
