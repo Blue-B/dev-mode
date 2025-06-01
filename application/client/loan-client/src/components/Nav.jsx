@@ -20,6 +20,18 @@ const supabase = createClient(
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
+// 금액을 한글 단위로 변환하는 유틸리티 함수
+const formatAmount = (amount) => {
+    if (amount >= 100000000) {
+        return `${Math.floor(amount / 100000000)}억원`;
+    } else if (amount >= 10000) {
+        return `${Math.floor(amount / 10000)}만원`;
+    } else if (amount >= 1000) {
+        return `${Math.floor(amount / 1000)}천원`;
+    }
+    return `${amount.toLocaleString()}원`;
+};
+
 const Nav = () => {
   const [userName, setUserName] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
@@ -100,7 +112,12 @@ const Nav = () => {
           <div>
             <div className="text-base">{userName || "Guest"}</div>
             <div className="text-sm text-gray-500">
-              잔액: {loadingWallet ? "로딩중…" : `${balance.toLocaleString()} KRW`}
+              {loadingWallet ? "로딩중…" : (
+                <div className="flex flex-col">
+                  <span>잔액: {formatAmount(balance)}</span>
+                  <span className="text-xs">{balance.toLocaleString()} KRW</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

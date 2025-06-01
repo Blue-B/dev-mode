@@ -23,6 +23,18 @@ const durationOptions = Array.from({
     length: 60
 }, (_, i) => i + 1);
 
+// 금액을 한글 단위로 변환하는 유틸리티 함수
+const formatAmount = (amount) => {
+    if (amount >= 100000000) {
+        return `${Math.floor(amount / 100000000)}억원`;
+    } else if (amount >= 10000) {
+        return `${Math.floor(amount / 10000)}만원`;
+    } else if (amount >= 1000) {
+        return `${Math.floor(amount / 1000)}천원`;
+    }
+    return `${amount.toLocaleString()}원`;
+};
+
 const Dashboard = () => {
     const [walletAddress, setWalletAddress] = useState('');
     const [balance, setBalance] = useState(0);
@@ -282,160 +294,170 @@ const Dashboard = () => {
     // ); }
 
     return (
-        <div className="bg-white text-gray-800 p-20 text-[17px] ">
+        <div className="bg-white text-gray-800 p-4 sm:p-8 md:p-12 lg:p-20 text-[15px] sm:text-[17px]">
             {/* 상단 카드 */}
-            <div className="grid grid-cols-4 gap-4 mb-10">
-                <div className="p-6 border rounded-xl">
-                    <p className="text-sm text-gray-500">신용 점수</p>
-                    <p className="text-3xl font-bold">850
-                        <span className="text-green-500 text-base">▲2.5%</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+                {/* 신용 점수 카드 */}
+                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
+                    <p className="text-sm text-gray-500 mb-1">신용 점수</p>
+                    <div className="flex items-baseline">
+                        <p className="text-2xl sm:text-3xl font-bold whitespace-nowrap">
+                            850
+                        </p>
+                        <span className="text-green-500 text-sm sm:text-base ml-2">▲2.5%</span>
+                    </div>
+                </div>
+
+                {/* 활성 대출 카드 */}
+                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
+                    <p className="text-sm text-gray-500 mb-1">활성 대출</p>
+                    <p className="text-2xl sm:text-3xl font-bold mb-1">
+                        {loans.filter(loan => loan.status === 'Active').length}
+                    </p>
+                    <p className="text-sm sm:text-base text-gray-600 truncate">
+                        총 {formatAmount(loans.filter(loan => loan.status === 'Active')
+                            .reduce((sum, loan) => sum + loan.amount, 0))}
                     </p>
                 </div>
-                <div className="p-6 border rounded-xl">
-                    <p className="text-sm text-gray-500">활성 대출</p>
-                    <p className="text-3xl font-bold">{
-                            loans
-                                .filter(loan => loan.status === 'Active')
-                                .length
-                        }</p>
-                    <p className="text-base">총 {
-                            loans
-                                .filter(loan => loan.status === 'Active')
-                                .reduce((sum, loan) => sum + loan.amount, 0)
-                                .toLocaleString()
-                        }
-                        KRW</p>
-                </div>
-                <div className="p-6 border rounded-xl">
-                    <p className="text-sm text-gray-500">대출 상환율</p>
-                    <p className="text-3xl font-bold">98%</p>
+
+                {/* 대출 상환율 카드 */}
+                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
+                    <p className="text-sm text-gray-500 mb-1">대출 상환율</p>
+                    <p className="text-2xl sm:text-3xl font-bold mb-1">98%</p>
                     <p className="text-xs text-gray-400">지난 12개월</p>
                 </div>
-                <div className="p-6 border rounded-xl">
-                    <p className="text-sm text-gray-500">이용 가능한 한도</p>
-                    <p className="text-3xl font-bold">{balance.toLocaleString()}
-                        KRW</p>
-                    <p className="text-xs text-gray-400">현재 잔액</p>
+
+                {/* 잔액 카드 */}
+                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
+                    <p className="text-sm text-gray-500 mb-1">잔액</p>
+                    <div className="flex flex-col">
+                        <p className="text-2xl sm:text-3xl font-bold mb-1">
+                            {formatAmount(balance)}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                            {balance.toLocaleString()} KRW
+                        </p>
+                    </div>
                 </div>
             </div>
 
             {/* 대출 요청 섹션 */}
-            {/* 요청 강조 카드 */}
-            <div className="relative flex items-center justify-between bg-gradient-to-r from-blue-500 to-purple-400 text-white rounded-2xl shadow-xl p-8 min-h-[220px] mb-10 overflow-hidden">
-            {/* 왼쪽 콘텐츠 */}
-            <div className="z-10 space-y-3 max-w-md">
-                {/* 아이콘 + 제목 */}
-                <div className="flex items-center space-x-3 mb-3">
-                <div className="bg-white p-2 rounded-xl flex items-center justify-center shadow-md w-12 h-12">
-                    <img src={'/dashboard_1.png'} alt="친구에게 대출 요청 아이콘" className="w-8 h-8" />
+            <div className="relative flex items-center justify-between bg-gradient-to-r from-blue-500 to-purple-400 text-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 min-h-[180px] sm:min-h-[220px] mb-10 overflow-hidden">
+                {/* 왼쪽 콘텐츠 */}
+                <div className="z-10 space-y-2 sm:space-y-3 max-w-md">
+                    {/* 아이콘 + 제목 */}
+                    <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+                        <div className="bg-white p-1.5 sm:p-2 rounded-xl flex items-center justify-center shadow-md w-10 h-10 sm:w-12 sm:h-12">
+                            <img src={'/dashboard_1.png'} alt="친구에게 대출 요청 아이콘" className="w-6 h-6 sm:w-8 sm:h-8" />
+                        </div>
+                        <h1 className="text-lg sm:text-xl font-semibold">친구에게 대출 요청</h1>
+                    </div>
+
+                    {/* 설명 텍스트 */}
+                    <p className="text-sm sm:text-base leading-relaxed opacity-90">
+                        <span className="font-semibold">쉽고 빠르게</span> 친구에게 대출을 요청하세요.<br />
+                        요청이 승인되면 즉시 대출이 진행됩니다.
+                    </p>
+
+                    {/* 버튼 */}
+                    <button
+                        onClick={() => navigate('/dashboard/request')}
+                        className="mt-4 sm:mt-6 inline-flex items-center bg-white text-blue-700 px-6 sm:px-8 py-2 sm:py-3 rounded-xl font-semibold shadow-lg hover:bg-gray-100 transition transform hover:scale-105 mb-4 sm:mb-6"
+                    >
+                        <img src={'/dashboard_2.png'} alt="대출 요청 아이콘" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                        친구 대출 요청하기
+                    </button>
                 </div>
-                <h1 className="text-xl font-semibold">친구에게 대출 요청</h1>
+
+                {/* 오른쪽 큰 아이콘 */}
+                <div className="absolute right-4 sm:right-6 bottom-4 sm:bottom-6 opacity-40 text-white hidden md:block">
+                    <HandHeart size={60} className="sm:w-80 sm:h-80" />
                 </div>
-
-                {/* 설명 텍스트 */}
-                <p className="text-base leading-relaxed opacity-90">
-                <span className="font-semibold">쉽고 빠르게</span> 친구에게 대출을 요청하세요.<br />
-                요청이 승인되면 즉시 대출이 진행됩니다.
-                </p>
-
-                {/* 버튼 */}
-                <button
-                onClick={() => navigate('/dashboard/request')}
-                className="mt-6 inline-flex items-center bg-white text-blue-700 px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-gray-100 transition transform hover:scale-105 mb-6"
-                >
-                <img src={'/dashboard_2.png'} alt="대출 요청 아이콘" className="w-5 h-5 mr-2" />
-                친구 대출 요청하기
-                </button>
-            </div>
-
-            {/* 오른쪽 큰 아이콘 */}
-            <div className="absolute right-6 bottom-6 opacity-40 text-white hidden md:block">
-                <HandHeart size={80} />
-            </div>
             </div>
 
             {/* 최근 활동 */}
-            {/* 로그인한 유저가 참여한 대출 활동 (최신순 정렬) */}
             <div>
-                <h2 className="text-xl font-semibold mb-4">최근 활동</h2>
+                <h2 className="text-lg sm:text-xl font-semibold mb-4">최근 활동</h2>
                 <div className="space-y-4">
-                    {
-                        loans.map(loan => {
-                                const isLender = loan.lender === walletAddress;
-                                const otherId = isLender ? loan.borrower : loan.lender;
-                                const other = profileMap[otherId] || {};
-                                const otherName = other.name || other.email || otherId;
-                                let text = '';
-                                switch (loan.status) {
-                                case 'Pending':
-                                    text = isLender
+                    {loans.map(loan => {
+                        const isLender = loan.lender === walletAddress;
+                        const otherId = isLender ? loan.borrower : loan.lender;
+                        const other = profileMap[otherId] || {};
+                        const otherName = other.name || other.email || otherId;
+                        let text = '';
+                        switch (loan.status) {
+                            case 'Pending':
+                                text = isLender
                                     ? `${otherName}님이 대출을 요청했습니다`
                                     : `${otherName}님에게 대출을 요청했습니다`;
-                                    break;
-                                case 'Active':
-                                    text = isLender
+                                break;
+                            case 'Active':
+                                text = isLender
                                     ? `${otherName}님의 대출을 승인했습니다`
-                                    : `${otherName}님에게 대출을 받았습니다`; break;
-                                case 'Repaid':
-                                    text = isLender
+                                    : `${otherName}님에게 대출을 받았습니다`;
+                                break;
+                            case 'Repaid':
+                                text = isLender
                                     ? `${otherName}님이 상환했습니다`
-                                    : `상환한 대출입니다`; break;
-                                case 'Denied':
-                                    text = isLender
+                                    : `상환한 대출입니다`;
+                                break;
+                            case 'Denied':
+                                text = isLender
                                     ? `${otherName}님의 요청 거절됨`
-                                    : `내 요청 거절됨`; break;
-                                default: text = '';
-                            }
+                                    : `내 요청 거절됨`;
+                                break;
+                            default:
+                                text = '';
+                        }
 
-                            return (
-                                <div key={loan.id} className="flex items-center justify-between p-4 border rounded-xl mb-2">
-                                    {/* 왼쪽: 텍스트 */}
-                                    <div className="flex flex-col">
-                                        <p className="mb-1">{text}</p>
-                                        <p className="text-sm text-gray-500">
-                                        {loan.amount.toLocaleString()} KRW • {loan.durationDays}일
-                                        </p>
-                                    </div>
+                        return (
+                            <div key={loan.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-xl mb-2">
+                                {/* 왼쪽: 텍스트 */}
+                                <div className="flex flex-col mb-2 sm:mb-0">
+                                    <p className="mb-1 text-sm sm:text-base">{text}</p>
+                                    <p className="text-xs sm:text-sm text-gray-500">
+                                        {formatAmount(loan.amount)} • {loan.durationDays}일
+                                    </p>
+                                </div>
 
-                                    {/* 오른쪽: Pending 버튼 또는 상태 뱃지 */}
-                                    <div className="flex items-center space-x-2">
-                                        {loan.status === 'Pending' && isLender && (
+                                {/* 오른쪽: Pending 버튼 또는 상태 뱃지 */}
+                                <div className="flex items-center space-x-2">
+                                    {loan.status === 'Pending' && isLender && (
                                         <>
                                             <button
-                                            onClick={() => handleApproveLoan(loan.id)}
-                                            className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md hover:bg-green-100"
+                                                onClick={() => handleApproveLoan(loan.id)}
+                                                className="text-green-600 text-xs sm:text-sm bg-green-50 px-2 sm:px-3 py-1 rounded-md hover:bg-green-100"
                                             >
-                                            수락
+                                                수락
                                             </button>
                                             <button
-                                            onClick={() => handleDenyLoan(loan.id)}
-                                            className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md hover:bg-red-100"
+                                                onClick={() => handleDenyLoan(loan.id)}
+                                                className="text-red-500 text-xs sm:text-sm bg-red-50 px-2 sm:px-3 py-1 rounded-md hover:bg-red-100"
                                             >
-                                            거절
+                                                거절
                                             </button>
                                         </>
-                                        )}
-                                        {loan.status === 'Active' && (
-                                        <span className="text-green-600 text-sm bg-green-50 px-3 py-1 rounded-md">
+                                    )}
+                                    {loan.status === 'Active' && (
+                                        <span className="text-green-600 text-xs sm:text-sm bg-green-50 px-2 sm:px-3 py-1 rounded-md">
                                             진행중
                                         </span>
-                                        )}
-                                        {loan.status === 'Denied' && (
-                                        <span className="text-red-500 text-sm bg-red-50 px-3 py-1 rounded-md">
+                                    )}
+                                    {loan.status === 'Denied' && (
+                                        <span className="text-red-500 text-xs sm:text-sm bg-red-50 px-2 sm:px-3 py-1 rounded-md">
                                             거절됨
                                         </span>
-                                        )}
-                                        {loan.status === 'Repaid' && (
-                                        <span className="text-green-600 text-sm flex items-center space-x-1">
-                                            <span className="text-xl">✔</span>
+                                    )}
+                                    {loan.status === 'Repaid' && (
+                                        <span className="text-green-600 text-xs sm:text-sm flex items-center space-x-1">
+                                            <span className="text-lg sm:text-xl">✔</span>
                                             <span>완료</span>
                                         </span>
-                                        )}
-                                    </div>
-                                    </div>
-                            );
-                        })
-                    }
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
