@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { HandCoins, ChevronLeft, Edit, Search } from "lucide-react";
 import { CheckCircle } from "lucide-react";
 import { Home, Wallet } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { fetchAcceptedFriendsWithWallets, createLoan, getUserWalletAddress } from '../services/api';
+import { useNavigate, useLocation } from "react-router-dom";
+import { fetchAcceptedFriendsWithWallets, getUserWalletAddress, getUserProfile } from '../services/api';
 import { useAuth } from '../contexts/AuthContext'; 
 import { createClient } from '@supabase/supabase-js';
 import {v4 as uuidv4} from 'uuid';
@@ -15,13 +15,13 @@ const supabase = createClient(
 
 export default function FriendLoanRequest() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {user} = useAuth();
 
   const [loanAmount, setLoanAmount] = useState("");
   const [interestRate, setInterestRate] = useState(5);
   const [loanTermMonths, setLoanTermMonths] = useState(12);
   const [borrowerName, setBorrowerName] = useState("나");
-  const [lenderName, setLenderName] = useState("");
   const [purposeMessage, setPurposeMessage] = useState("");
   const [isEditingInterestRate, setIsEditingInterestRate] = useState(false);
   
@@ -34,8 +34,10 @@ export default function FriendLoanRequest() {
         if (!user?.id) return;
 
         try {
-        const wallet = await getUserWalletAddress(user.id);
-        setUserWalletAddress(wallet);
+            const profile = await getUserProfile(user.id);
+            setBorrowerName(profile?.name || '나'); // 이름 설정
+            setUserWalletAddress(profile.wallet_id);
+        
         } catch (err) {
         console.error('🔍 사용자 지갑 주소 조회 실패:', err.message);
         alert(err.message);
@@ -58,6 +60,12 @@ export default function FriendLoanRequest() {
 
     loadFriendWallets();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (location.state?.nextStep) {
+      setCurrentStep(location.state.nextStep);
+    }
+  }, [location.state]);
   
   // Add state for current step
   const [currentStep, setCurrentStep] = useState(1);
@@ -99,10 +107,6 @@ export default function FriendLoanRequest() {
     const totalInterest = amount * rate * (months / 12);
     const totalRepayment = amount + totalInterest;
     return Math.round(totalRepayment);
-  };
-
-  const formatAmount = (amount) => {
-    return amount.toLocaleString() + "원";
   };
 
   const handleInterestRateChange = (e) => {
@@ -169,19 +173,30 @@ export default function FriendLoanRequest() {
         amount: amount,
         interestRate: parseFloat(interestRate),
         durationDays: durationDays,
+        durationMonths: durationMonths,
         endDateTimestamp: endDate.getTime(),
         message: purposeMessage || "",
       };
 
-      await createLoan(loanData);
+      // await createLoan(loanData);
 
-      alert('대출 요청이 생성되었습니다.');
-      setCurrentStep(3); // 완료 단계로 이동
+      // alert('대출 정보가 생성됐습니다.');
+      setCurrentStep(3); // 계약서 작성
+
+       navigate('/constract', {
+        state: {
+          currentStep: 3, // 계약서 작성
+          loanData,
+          selectedFriend,
+          estimatedRepaymentDate,
+          totalRepayment: calculateTotalRepayment()
+        }
+    });
     } catch (error) {
-      console.error('대출 생성 실패:', error);
-      alert('대출 생성 실패: ' + (error?.response?.data?.message || error.message));
+      console.error('대출 정보 생성 실패:', error);
+      alert('대출 정보 생성 실패: ' + (error?.response?.data?.message || error.message));
     }
-    setCurrentStep(3);
+
   };
 
 
@@ -217,7 +232,11 @@ export default function FriendLoanRequest() {
           {/* Step 3 */}
           <div className="flex items-center">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 3 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'}`}>3</div>
-            <span className={`ml-2 text-sm ${currentStep === 3 ? 'text-blue-500 font-semibold' : 'text-gray-400'}`}>요청 전송</span>
+            <span className={`ml-2 text-sm ${currentStep === 3 ? 'text-blue-500 font-semibold' : 'text-gray-400'}`}>계약서 작성</span>
+          </div>
+          <div className="flex items-center">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 3 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'}`}>3</div>
+            <span className={`ml-2 text-sm ${currentStep === 4 ? 'text-blue-500 font-semibold' : 'text-gray-400'}`}>요청 전송</span>
           </div>
         </div>
         </div>
@@ -427,21 +446,7 @@ export default function FriendLoanRequest() {
                         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500"
                   />
                 </div>
-                <div>
-                      <div className="flex items-center mb-2">
-                        <svg className="w-4 h-4 mr-2 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                        </svg>
-                        <span className="text-sm font-medium text-gray-700">차입자 (받는 친구)</span>
-                      </div>
-                  <input
-                    type="text"
-                    placeholder="친구 이름을 입력하세요"
-                        value={lenderName}
-                        onChange={(e) => setLenderName(e.target.value)}
-                        className="w-full px-3 py-2 text-sm placeholder-gray-400 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+         
               </div>
 
                   {/* Purpose Message */}
@@ -601,8 +606,9 @@ export default function FriendLoanRequest() {
              </div>
         )}
 
-        {/* Step 3: Request Submission (Placeholder) */}
-        {currentStep === 3 && (
+
+        {/* Step 4: Request Submission (Placeholder) */}
+        {currentStep === 4 && (
             <div className="flex flex-col items-center p-6 overflow-hidden text-center bg-white shadow-md rounded-2xl">
                  {/* Checkmark Icon with enhanced animated background (Ripple effect) */}
                  <div className="relative flex items-center justify-center w-24 h-24 mb-6"> {/* Container for icon and background */}
@@ -674,14 +680,14 @@ export default function FriendLoanRequest() {
                  onClick={handleCreateLoan}
                  disabled={!selectedFriend}
                >
-                 다음 단계: 요청 전송
+                 다음 단계: 계약서 작성하기 
                  <svg className="w-4 h-4 ml-2" fill="currentColor" viewBox="0 0 20 20">
                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                  </svg>
               </button>
             </>
            )}
-           {currentStep === 3 && (
+           {currentStep === 4 && (
              <>
                <button className="flex items-center justify-center flex-1 py-4 font-semibold text-blue-600 transition-colors bg-blue-50 rounded-xl hover:bg-blue-100">
                  <Wallet className="w-5 h-5 mr-2"/>내 대출 관리

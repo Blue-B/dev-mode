@@ -38,21 +38,21 @@ rm -rf application/connection-org1.json
 
 
 
-echo "📦 Supabase .env 환경변수 로드"
+# echo "📦 Supabase .env 환경변수 로드"
 
-ENV_PATH="/home/ubuntu/go/src/dev-mode/application/rest/.env"
+# ENV_PATH="/home/ubuntu/go/src/dev-mode/application/rest/.env"
 
-SUPABASE_URL=$(grep SUPABASE_URL $ENV_PATH | cut -d '=' -f2)
-SUPABASE_SERVICE_ROLE_KEY=$(grep SUPABASE_SERVICE_ROLE_KEY $ENV_PATH | cut -d '=' -f2)
+# SUPABASE_URL=$(grep SUPABASE_URL $ENV_PATH | cut -d '=' -f2)
+# SUPABASE_SERVICE_ROLE_KEY=$(grep SUPABASE_SERVICE_ROLE_KEY $ENV_PATH | cut -d '=' -f2)
 
-echo "🔑 Loaded SUPABASE_URL=$SUPABASE_URL"
+# echo "🔑 Loaded SUPABASE_URL=$SUPABASE_URL"
 
-echo "🧹 Supabase DB 초기화 중..."
+# echo "🧹 Supabase DB 초기화 중..."
 
-curl -X POST "$SUPABASE_URL/rest/v1/rpc/reset_wallets" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{}' || echo "⚠️ Supabase 초기화 실패"
+# curl -X POST "$SUPABASE_URL/rest/v1/rpc/reset_wallets" \
+#   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+#   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{}' || echo "⚠️ Supabase 초기화 실패"
 
-echo "✅ Fabric + Supabase 초기화 완료"es
+# echo "✅ Fabric + Supabase 초기화 완료"es
