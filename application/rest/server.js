@@ -733,3 +733,96 @@ app.listen(PORT, HOST, async () => {
   // 서버 시작 직후 동기화 실행
   await syncWalletsToChaincode();
 });
+
+// ================= 친구 API ==================
+
+// 친구 추가 요청
+app.post('/api/friends/add', async (req, res) => {
+  const { userId, friendEmail } = req.body;
+
+  try {
+    // 친구 이메일로 사용자 검색
+    const { data: targetUser, error: searchError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', friendEmail)
+      .single();
+
+    if (searchError || !targetUser) {
+      return res.status(404).json({ error: '해당 이메일의 사용자를 찾을 수 없습니다.' });
+    }
+
+    // 기존 친구 요청 확인
+    const { data: existing, error: existingError } = await supabase
+      .from('friends')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('friend_user_id', targetUser.id)
+      .maybeSingle();
+
+    if (existing && existing.status === 'pending') {
+      return res.status(400).json({ error: '이미 친구 요청을 보냈습니다.' });
+    }
+
+    // 친구 요청 추가
+    const { error: insertError } = await supabase.from('friends').insert([
+      {
+        user_id: userId,
+        friend_user_id: targetUser.id,
+        status: 'pending',
+      },
+    ]);
+
+    if (insertError) {
+      return res.status(500).json({ error: '친구 요청 추가 중 오류가 발생했습니다.' });
+    }
+
+    res.status(200).json({ message: '친구 요청이 전송되었습니다.' });
+  } catch (err) {
+    console.error('친구 추가 요청 처리 중 오류:', err);
+    res.status(500).json({ error: '친구 추가 요청 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+// 친구 목록 조회
+app.get('/api/friends', async (req, res) => {
+  const { userId } = req.query;
+
+  try {
+    const { data, error } = await supabase
+      .from('friends')
+      .select('*')
+      .or(`user_id.eq.${userId},friend_user_id.eq.${userId}`)
+      .eq('status', 'accepted');
+
+    if (error) {
+      return res.status(500).json({ error: '친구 목록 조회 중 오류가 발생했습니다.' });
+    }
+
+    res.status(200).json({ friends: data });
+  } catch (err) {
+    console.error('친구 목록 조회 처리 중 오류:', err);
+    res.status(500).json({ error: '친구 목록 조회 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+// 친구 요청 수락/거절
+app.patch('/api/friends/request', async (req, res) => {
+  const { requestId, status } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('friends')
+      .update({ status })
+      .eq('id', requestId);
+
+    if (error) {
+      return res.status(500).json({ error: '친구 요청 업데이트 중 오류가 발생했습니다.' });
+    }
+
+    res.status(200).json({ message: '친구 요청이 업데이트되었습니다.' });
+  } catch (err) {
+    console.error('친구 요청 업데이트 처리 중 오류:', err);
+    res.status(500).json({ error: '친구 요청 업데이트 처리 중 오류가 발생했습니다.' });
+  }
+});

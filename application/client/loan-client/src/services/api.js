@@ -256,3 +256,36 @@ export const fetchAcceptedFriendsWithWallets = async (userId, supabase) => {
     // wallet_id가 null이 아닌 친구들만 포함한 배열을 반환
     return profiles.filter(profile => profile.wallet_id);
 };
+
+// 친구 추가 요청
+export const sendFriendRequest = async (friendId) => {
+  try {
+    const response = await api.post('/friends/add', { friendId });
+    return response.data;
+  } catch (error) {
+    console.error('친구 추가 요청 실패:', error);
+    throw error;
+  }
+};
+
+// 친구 목록 조회
+export const getFriendList = async () => {
+  try {
+    const response = await api.get('/friends');
+    return response.data.friends;
+  } catch (error) {
+    console.error('친구 목록 조회 실패:', error);
+    throw error;
+  }
+};
+
+// 친구 요청 수락/거절
+export const handleFriendRequest = async (requestId, status) => {
+  try {
+    const response = await api.patch('/friends/request', { requestId, status });
+    return response.data;
+  } catch (error) {
+    console.error('친구 요청 처리 실패:', error);
+    throw error;
+  }
+};
