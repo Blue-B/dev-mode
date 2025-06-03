@@ -632,11 +632,6 @@ app.post('/api/inquiry', authenticateUser, async (req, res) => {
   }
 });
 
-// 마지막에만 index.html 반환 (SPA 대응용)
-app.get('*', function (req, res) {
-  res.sendFile(path.join(clientPath, 'index.html'));
-});
-
 // reCAPTCHA 검증 함수
 async function verifyRecaptcha(token) {
   try {
@@ -784,25 +779,132 @@ app.post('/api/friends/add', async (req, res) => {
   }
 });
 
+
+// =============================================
 // 친구 목록 조회
-app.get('/api/friends', async (req, res) => {
-  const { userId } = req.query;
+// GET /api/friends
+// =============================================
+app.get('/api/friends', authenticateUser, async (req, res) => {
+  const myId = req.user.id; // 인증 미들웨어가 붙여넣은 현재 사용자의 UUID
 
   try {
-    const { data, error } = await supabase
+    // 1) 내가 user_id인 친구 관계 (내가 보낸 요청, status='accepted')
+    //    -> friend_user_id 컬럼이 상대방 프로필의 UUID
+    const { data: sentRows, error: sentErr } = await supabase
       .from('friends')
-      .select('*')
-      .or(`user_id.eq.${userId},friend_user_id.eq.${userId}`)
+      .select('friend_user_id')
+      .eq('user_id', myId)
       .eq('status', 'accepted');
-
-    if (error) {
-      return res.status(500).json({ error: '친구 목록 조회 중 오류가 발생했습니다.' });
+    if (sentErr) {
+      console.error('[Server] Supabase sentRows 에러 →', sentErr);
+      return res.status(500).json({ error: '친구 조회 실패(1)' });
     }
 
-    res.status(200).json({ friends: data });
+    // 2) 내가 friend_user_id인 친구 관계 (내가 받은 요청, status='accepted')
+    //    -> user_id 컬럼이 상대방 프로필의 UUID
+    const { data: receivedRows, error: recErr } = await supabase
+      .from('friends')
+      .select('user_id')
+      .eq('friend_user_id', myId)
+      .eq('status', 'accepted');
+    if (recErr) {
+      console.error('[Server] Supabase receivedRows 에러 →', recErr);
+      return res.status(500).json({ error: '친구 조회 실패(2)' });
+    }
+
+    // 3) 위 두 배열을 합쳐서, 중복 없이 “친구의 프로필 ID”만 모은다
+    const partnerIds = [
+      ...sentRows.map(r => r.friend_user_id),
+      ...receivedRows.map(r => r.user_id)
+    ]
+      .filter((v, i, a) => v && a.indexOf(v) === i);
+
+    // 친구가 아무도 없으면 빈 배열 반환
+    if (partnerIds.length === 0) {
+      return res.status(200).json({ friends: [] });
+    }
+
+    // 4) profiles 테이블에서 partnerIds에 해당하는 row들을 한 번에 가져온다
+    //    – 칼럼 선택 시 avatar_url 대신 profile_image_url 로 수정
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, profile_image_url')
+      .in('id', partnerIds);
+    if (profErr) {
+      console.error('[Server] Supabase 프로필 조회 에러 →', profErr);
+      return res.status(500).json({ error: '프로필 조회 실패' });
+    }
+
+    // 5) 프론트가 기대하는 형태로 포맷
+    //    { id, profile: { id, name, email, profile_image_url } }
+    const friends = profiles.map(p => ({
+      id: p.id,
+      profile: {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        profile_image_url: p.profile_image_url || null
+      }
+    }));
+
+    console.log('[Server] 최종 friends →', friends);
+    return res.status(200).json({ friends });
   } catch (err) {
-    console.error('친구 목록 조회 처리 중 오류:', err);
-    res.status(500).json({ error: '친구 목록 조회 처리 중 오류가 발생했습니다.' });
+    console.error('[Server] /api/friends 에러 →', err);
+    return res.status(500).json({ error: '친구 목록 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+
+// =============================================
+// 받은 친구 요청 조회
+// GET /api/friends/received
+// =============================================
+app.get('/api/friends/received', authenticateUser, async (req, res) => {
+  const myId = req.user.id;
+
+  try {
+    // 1) 내게 온(friend_user_id = myId) status='pending'인 친구 요청
+    const { data: rows, error: rowsErr } = await supabase
+      .from('friends')
+      .select('id, user_id')   // id: friends PK, user_id: 요청 보낸 쪽 UUID
+      .eq('friend_user_id', myId)
+      .eq('status', 'pending');
+    if (rowsErr) {
+      console.error('[Server] /api/friends/received 조회 에러 →', rowsErr);
+      return res.status(500).json({ error: '받은 요청 조회 실패' });
+    }
+
+    // 2) 요청 보낸 쪽(user_id) 프로필만 가져오기 (id, name, email, profile_image_url)
+    const senderIds = rows.map(r => r.user_id).filter(v => v);
+    if (senderIds.length === 0) {
+      return res.status(200).json({ requests: [] });
+    }
+
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, profile_image_url')
+      .in('id', senderIds);
+    if (profErr) {
+      console.error('[Server] Supabase 프로필 조회 에러 →', profErr);
+      return res.status(500).json({ error: '프로필 조회 실패' });
+    }
+
+    // 3) friends 테이블의 row(id, user_id)와 profiles(row) 정보를 묶어서 반환
+    //    { id: <friends PK>, user_id: <보낸 쪽 UUID>, profile: { … } }
+    const requests = rows.map(r => {
+      const prof = profiles.find(p => p.id === r.user_id);
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        profile: prof || { id: r.user_id, name: null, email: null, profile_image_url: null }
+      };
+    });
+
+    return res.status(200).json({ requests });
+  } catch (err) {
+    console.error('[Server] /api/friends/received 에러 →', err);
+    return res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -825,4 +927,10 @@ app.patch('/api/friends/request', async (req, res) => {
     console.error('친구 요청 업데이트 처리 중 오류:', err);
     res.status(500).json({ error: '친구 요청 업데이트 처리 중 오류가 발생했습니다.' });
   }
+});
+
+// 마지막에만 index.html 반환 (SPA 대응용)
+// “캐치올” 라우트: 위에서 매칭되지 않은 모든 GET 요청에 대해 index.html을 내보낸다
+app.get('*', function (req, res) {
+  res.sendFile(path.join(clientPath, 'index.html'));
 });

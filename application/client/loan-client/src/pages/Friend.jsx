@@ -2,19 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { UserPlusIcon } from '@heroicons/react/24/solid';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/solid';
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
+import { useAuth } from '../contexts/AuthContext'; 
+import { 
+  getCurrentUser,
+  getFriendList,
+  getReceivedRequests,
+  sendFriendRequest,
+  handleFriendRequest,
+ } from '../services/api';
 
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
 
 function Friend() {
+    const {user} = useAuth();
+
   const [searchKeyword, setSearchKeyword] = useState('');
   const [myFriends, setMyFriends] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalContent, setModalContent] = useState({
     type: '',
@@ -45,188 +50,86 @@ function Friend() {
     }, interval);
   };
 
-  const handleFriendAdd = async () => {
-    if (!searchKeyword) return;
-    if (!currentUser?.id) {
-      showNotification('error', '로그인 필요', '로그인이 필요합니다.');
-      return;
-    }
-
-    try {
-      // Supabase를 통한 친구 추가
-      const { data: targetUser, error: searchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', searchKeyword)
-        .single();
-
-      if (searchError || !targetUser) {
-        showNotification('error', '사용자 없음', '해당 이메일의 사용자를 찾을 수 없습니다.');
-        return;
-      }
-
-      const { data: existing, error: existingError } = await supabase
-        .from('friends')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('friend_user_id', targetUser.id)
-        .maybeSingle();
-
-      if (existing && existing.status === 'pending') {
-        showNotification('error', '중복 요청', '이미 친구 요청을 보냈습니다.');
-        return;
-      }
-
-      const { error: insertError } = await supabase.from('friends').insert([
-        {
-          user_id: currentUser.id,
-          friend_user_id: targetUser.id,
-          status: 'pending',
-        },
-      ]);
-
-      if (insertError) {
-        showNotification('error', '요청 실패', insertError.message);
-      } else {
-        showNotification('success', '요청 완료', '친구 요청을 보냈습니다!');
-        setSearchKeyword('');
-      }
-
-      // 백엔드 API를 통한 친구 추가
-      await axios.post('/api/friends/add', {
-        userId: currentUser.id,
-        friendEmail: searchKeyword,
-      });
-    } catch (error) {
-      console.error('친구 추가 처리 중 오류:', error);
-      showNotification('error', '요청 실패', '알 수 없는 오류가 발생했습니다.');
-    }
-  };
-
   const fetchReceivedRequests = async () => {
-    if (!currentUser?.id) return;
+    if (!user?.id) return;
 
     try {
-      // Supabase를 통한 요청 목록 가져오기
-      const { data, error } = await supabase
-        .from('friends')
-        .select(`
-          id,
-          user_id,
-          profiles:user_id ( email, name )
-        `)
-        .eq('friend_user_id', currentUser.id)
-        .eq('status', 'pending');
-
-      if (error) {
-        console.error('요청 목록 불러오기 실패:', error);
-      } else {
-        setReceivedRequests(data);
-      }
-
-      // 백엔드 API를 통한 요청 목록 가져오기
-      const response = await axios.get('/api/friends', {
-        params: { userId: currentUser.id, type: 'received' },
-      });
-
+      const response = await axios.get('/api/friends/received'); 
+      // authenticateUser 미들웨어를 거치므로, axios 인스턴트에 이미 토큰이 붙습니다.
       setReceivedRequests(response.data.requests || []);
     } catch (error) {
-      console.error('요청 목록 처리 중 오류:', error);
+      console.error('[Friend] 요청 목록 처리 중 오류:', error);
     }
   };
 
-  const fetchFriends = async () => {
-    if (!currentUser?.id) return;
+  // --------- 친구 추가 -------------
+  const handleFriendAdd = async () => {
+    if (!searchKeyword || !user?.id) return;
 
     try {
-      // Supabase를 통한 친구 목록 가져오기
-      const { data, error } = await supabase
-        .from('friends')
-        .select(`
-          id,
-          user_id,
-          friend_user_id,
-          profiles:friend_user_id ( email, name )
-        `)
-        .or(`user_id.eq.${currentUser.id},friend_user_id.eq.${currentUser.id}`)
-        .eq('status', 'accepted');
-
-      if (error) {
-        console.error('친구 목록 불러오기 실패:', error);
-      } else {
-        const friendsList = await Promise.all(
-          data.map(async (f) => {
-            const isRequester = f.user_id === currentUser.id;
-            const otherUserId = isRequester ? f.friend_user_id : f.user_id;
-
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('name, email')
-              .eq('id', otherUserId)
-              .single();
-
-            return {
-              id: f.id,
-              profile: profileData,
-            };
-          })
-        );
-
-        setMyFriends(friendsList);
-      }
-
-      // 백엔드 API를 통한 친구 목록 가져오기
-      const response = await axios.get('/api/friends', {
-        params: { userId: currentUser.id, type: 'friends' },
-      });
-
-      setMyFriends(response.data.friends || []);
+      await sendFriendRequest(user.id, searchKeyword);
+      showNotification('success', '요청 완료', '친구 요청을 보냈습니다!');
+      setSearchKeyword('');
+      // 추가 요청을 보낸 뒤, “받은 요청” 또는 “친구 목록” 등을 갱신하고 싶다면 아래를 호출하세요.
+      fetchFriends();
+      fetchReceivedRequests();
     } catch (error) {
-      console.error('친구 목록 처리 중 오류:', error);
+      console.error('[Friend] 친구 추가 처리 중 오류:', error);
+      showNotification(
+        'error',
+        '요청 실패',
+        error?.response?.data?.error || error.message || '알 수 없는 오류가 발생했습니다.'
+      );
     }
   };
 
+  // 서버에서 내 친구 목록을 불러오는 함수
+  const fetchFriends = async () => {
+    try {
+      const friends = await getFriendList();
+      setMyFriends(friends);
+    } catch (err) {
+      console.error('[Friend] 친구 목록 처리 중 오류:', err);
+    }
+  };
+
+  // 서버에서 받은 친구 요청(‘pending’) 목록을 불러오는 함수
+  const fetchReceived = async () => {
+    try {
+      const requests = await getReceivedRequests();
+      setReceivedRequests(requests);
+    } catch (err) {
+      console.error('[Friend] 받은 요청 처리 중 오류:', err);
+    }
+  };
+
+
+  // ======== 받은 요청 수락/거절 ========
   const respondToRequest = async (friendRequestId, accept = true) => {
     try {
-      // Supabase를 통한 요청 응답 처리
-      const { error } = await supabase
-        .from('friends')
-        .update({ status: accept ? 'accepted' : 'rejected' })
-        .eq('id', friendRequestId);
-
-      if (error) {
-        showNotification('error', '처리 실패', error.message);
-      } else {
-        showNotification('success', '요청 처리 완료', accept ? '친구 요청을 수락했습니다.' : '친구 요청을 거절했습니다.');
-        fetchReceivedRequests();
-        fetchFriends();
-      }
-
-      // 백엔드 API를 통한 요청 응답 처리
-      await axios.patch('/api/friends/request', {
-        requestId: friendRequestId,
-        accept,
-      });
+      await handleFriendRequest(friendRequestId, accept);
+      showNotification(
+        'success',
+        '요청 처리 완료',
+        accept ? '친구 요청을 수락했습니다.' : '친구 요청을 거절했습니다.'
+      );
+      // 처리 후 다시 갱신
+      fetchReceived();
+      fetchFriends();
     } catch (error) {
-      console.error('친구 요청 처리 중 오류:', error);
+      console.error('[Friend] 친구 요청 처리 중 오류:', error);
       showNotification('error', '처리 실패', '알 수 없는 오류가 발생했습니다.');
     }
   };
 
+  // user가 바뀔 때(=로그인 상태가 확인될 때)만 호출
   useEffect(() => {
-    const fetchUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (user) setCurrentUser(user);
-    };
-    fetchUser();
-  }, []);
-
-  useEffect(() => {
-    if (currentUser?.id) {
+    if (user && user.id) {
       fetchFriends();
-      fetchReceivedRequests();
+      fetchReceived();
     }
-  }, [currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   return (
     <div className="p-6 bg-white rounded-md">
@@ -291,7 +194,7 @@ function Friend() {
               >
                 <div>
                   <p className="font-medium">
-                    {request.profiles?.name || request.profiles?.email}
+                    {request.profile?.name || request.profile?.email}
                   </p>
                   <p className="text-sm text-gray-500">친구 요청 도착</p>
                 </div>

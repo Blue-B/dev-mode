@@ -20,6 +20,7 @@ import Question from "./pages/Question";
 import EnsuringStability from "./pages/Ensuring-Stability";
 import Error from "./pages/Error";
 import FriendLoanRequest from "./pages/FriendLoanRequest";
+import LoanAgreement from "./pages/contract/LoanAgreement";
 
 
 // 보호된 라우트 컴포넌트: 로그인한 사용자만 접근 가능
@@ -127,7 +128,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <Constract />
+                  <LoanAgreement />
                 </AppLayout>
               </ProtectedRoute>
             }
