@@ -1,14 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from '../../contexts/AuthContext';
-import { createLoan } from '../../services/api';
+import { createLoan, getUserProfile } from '../../services/api';
 import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
 import { X, FileText, Edit3, PenTool, Download } from "lucide-react";
 
 
 
-export default function LoanAgreement() {
+export default function LoanAgreement({
+  loanData,
+  selectedFriend,
+  estimatedRepaymentDate,
+  totalRepayment,
+  startDate,
+  endDate,
+  goToPreviousStep,
+  goToNextStep
+}) {
   const navigate = useNavigate();
   const [showDetailedContract, setShowDetailedContract] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -17,55 +26,61 @@ export default function LoanAgreement() {
     lender: null,
     borrower: null
   });
-  const location = useLocation();
+  // const location = useLocation();
+  //   console.log("▶ LoanAgreement.location.state:", location.state);
+  const [isRequesting, setIsRequesting] = useState(false);
   const { user } = useAuth();
   const isLoggedIn = !!user;
 
-  const {
-    loanData,
-    selectedFriend,
-    estimatedRepaymentDate,
-    totalRepayment,
-  } = location.state || {};
-
+  // const {
+  //   loanData,
+  //   selectedFriend,
+  //   estimatedRepaymentDate,
+  //   totalRepayment,
+  //   startDate = "-",
+  //   endDate = "-",
+  // } = location.state || {};
+  
+  const [myProfile, setMyProfile] = useState(null); // 현재 로그인된 사용자의 프로필
+   
+  // 내 프로필 가져오기 (Supabase)
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const profile = await getUserProfile(user.id);
+        setMyProfile(profile);
+      } catch (err) {
+        console.error("내 프로필 조회 실패:", err);
+      }
+    })();
+  }, [user]);
+  
   const contractData = {
     amount: loanData?.amount || "0",
-    interestRate: loanData?.interest || "0",
-    duration: loanData?.duration || "0",
+    interestRate: loanData?.interestRate || "0",
     durationMonths: loanData?.durationMonths || "0",
     bankAccount: "신한은행 123-456-789012 (예금주: 김가환)",
-    lenderName: loanData?.lender || "",
-    lenderSSN : selectedFriend?.birth_number || "010120-3******",
+
+    // (1) 대출자(채권자) 정보: 선택된 친구 프로필에서 가져옴
+    lenderName: selectedFriend?.name || "",
+    lenderSSN: selectedFriend?.birth_number
+        ? `${selectedFriend.birth_number}-${"*".repeat(7)}`
+        : "010404-*******",
     lenderPhone: selectedFriend?.phone || "010-8674-7678",
     lenderAddress: selectedFriend?.address || "충남 천안시 서북구",
-    borrowerName: user?.name || "",
-    borrowerSSN: user?.birth_number || "010120-3******",
-    borrowerPhone: user?.phone || "010-8674-7678",
-    borrowerAddress: user?.address || "충남 천안시 서북구",
+
+    // (2) 대출받는 사람(차입자) 정보: 내 프로필에서 가져옴
+    borrowerName: myProfile?.name || "",
+    borrowerSSN: myProfile?.birth_number 
+        ? `${myProfile.birth_number}-${"*".repeat(7)}`
+        : "010120-3******",
+    borrowerPhone: myProfile?.phone || "010-8674-7678",
+    borrowerAddress: myProfile?.address || "충남 천안시 서북구",
+
     guarantor: "김보증 (주민등록번호: 010120-3******, 주소: 충남 천안시 서북구)"
   };
 
-    // 오늘 날짜 객체
-    const todayDate = new Date();
-
-    // 계약 종료일 계산 (n개월 뒤)
-    const endDate = new Date(todayDate);
-    endDate.setMonth(endDate.getMonth() + Number(contractData.duration));
-
-    // 형식 지정
-    const formattedToday = todayDate.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-    });
-
-    const formattedEndDate = endDate.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-    });
-
-  
   const handleClose = () => {
     // 팝업을 닫고 이전 단계로 돌아가기
     window.history.back();
@@ -79,10 +94,6 @@ export default function LoanAgreement() {
   const handleLenderSign = () => {
     setCurrentSigner('lender');
     setShowSignatureModal(true);
-  };
-  
-  const handleConfirm = () => {
-    console.log('Confirm loan contract');
   };
 
   const handleDocumentClick = () => {
@@ -101,22 +112,24 @@ export default function LoanAgreement() {
   };
      // 대출 요청 생성
   const handleSendLoan = async () => {
+
+    if (isRequesting) return; // 중복 요청 방지 (중요!)
+
+    setIsRequesting(true); // 요청 시작 시 상태 업데이트
+    
     try {
 
       const result = await createLoan(loanData);
-        console.log('📦 대출 생성 결과:', result);
+      console.log('📦 대출 생성 결과:', result);
         
       alert('대출 요청되었습니다.');
+      goToNextStep(4);
       
-        // step 4로 돌아가기
-        navigate('/dashboard/request', {
-        state: {
-            nextStep: 4
-            }
-        });
     } catch (error) {
       console.error('대출 생성 실패:', error);
       alert('대출 생성 실패: ' + (error?.response?.data?.message || error.message));
+    } finally {
+      setIsRequesting(false); // 요청 종료 후 상태 초기화
     }
   };
   
@@ -245,7 +258,7 @@ export default function LoanAgreement() {
                   <div className="grid grid-cols-2 text-xs gap-x-4 gap-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">계약 날짜</span>
-                      <span className="font-medium text-gray-900">{formattedToday} ~ {formattedEndDate}</span>
+                      <span className="font-medium text-gray-900">{startDate}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">대출 금액</span>
@@ -290,9 +303,11 @@ export default function LoanAgreement() {
                 <div className="pt-2 pb-4">
                   <button 
                     onClick={handleSendLoan}
-                    className="w-full py-3 text-sm font-medium text-white transition-colors bg-blue-500 hover:bg-blue-600 rounded-xl"
+                    disabled={isRequesting} // 👈 추가
+                    className={`w-full py-3 text-sm font-medium text-white transition-colors rounded-xl 
+                      ${isRequesting ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
                   >
-                    대출 요청하기
+                    {isRequesting ? '요청 중...' : '대출 요청하기'}
                   </button>
                 </div>
               </div>
