@@ -104,13 +104,15 @@ export const denyLoan = async (loanId) => {
   }
 };
 
-export const repayLoan = async (id) => {
-    try {
-        const response = await api.get(`/repayLoan?id=${id}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+// 개인 대출 상환
+export const repayLoan = async (loanId) => {
+  try {
+    const response = await api.post('/loan/repay', { loanId }); 
+    return response.data;
+  } catch (error) {
+    console.error('상환 요청 실패:', error);
+    throw error;
+  }
 };
 
 export const queryLoan = async (id) => {
