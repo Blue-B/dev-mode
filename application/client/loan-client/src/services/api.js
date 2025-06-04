@@ -67,17 +67,27 @@ export const getWalletBalance = async (address) => {
 // 대출 관련 API
 export const createLoan = async (loanData) => {
   try {
-    const response = await api.get('/createLoan', {
-      params: {
-        id: loanData.id,
-        lender: loanData.lender,
-        borrower: loanData.borrower,
-        amount: loanData.amount,
-        durationDays: loanData.durationDays,
-        interestRate: loanData.interestRate
-      }
+    if (!loanData.contractImage) {
+      throw new Error('계약서 이미지가 필요합니다.');
+    }
+
+    // 1. 대출 생성
+    const response = await api.post('/createLoan', {
+      id: loanData.id,
+      lender: loanData.lender,
+      borrower: loanData.borrower,
+      amount: loanData.amount,
+      durationDays: loanData.durationDays,
+      interestRate: loanData.interestRate
     });
-    return response.data;
+
+    // 2. 계약서 다운로드 및 해시 저장
+    await downloadAndSaveContract(loanData.id, loanData.contractImage);
+
+    return {
+      ...response.data,
+      message: '대출이 생성되었고 계약서가 다운로드되었습니다.'
+    };
   } catch (error) {
     console.error('대출 생성 실패:', error);
     throw error;
@@ -333,3 +343,66 @@ export async function handleFriendRequest(requestId, accept = true) {
     throw error;
   }
 }
+
+// 계약서 해시 검증
+export const verifyContract = async (loanId, contractImage) => {
+  try {
+    const response = await api.get('/api/contract/verify', {
+      params: { loanId },
+      data: { contractImage }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('계약서 검증 중 오류:', error);
+    throw error;
+  }
+};
+
+// 계약서 저장
+export const saveContract = async (loanId, contractImage) => {
+  try {
+    const response = await api.post('/api/contract/save', {
+      loanId,
+      contractImage
+    });
+    return response.data;
+  } catch (error) {
+    console.error('계약서 저장 중 오류:', error);
+    throw error;
+  }
+};
+
+// 계약서 다운로드 및 해시 저장 (필수 단계)
+export const downloadAndSaveContract = async (loanId, contractImage) => {
+  try {
+    if (!contractImage) {
+      throw new Error('계약서 이미지가 필요합니다.');
+    }
+
+    // 1. 계약서 해시 저장
+    const saveResult = await saveContract(loanId, contractImage);
+    if (!saveResult.success) {
+      throw new Error('계약서 해시 저장에 실패했습니다.');
+    }
+    
+    // 2. 계약서 다운로드 링크 생성
+    const blob = new Blob([contractImage], { type: 'image/png' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `contract_${loanId}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    return { 
+      success: true,
+      contractHash: saveResult.contractHash,
+      message: '계약서가 다운로드되었습니다.'
+    };
+  } catch (error) {
+    console.error('계약서 다운로드 및 저장 실패:', error);
+    throw error;
+  }
+};

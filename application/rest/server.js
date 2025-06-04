@@ -225,21 +225,27 @@ app.get('/getWalletBalance', async function (req, res) {
 
 // ================= 대출 시스템 API ==================
 
+// 한국 시간으로 변환하는 함수
+function getKoreanTime() {
+  const now = new Date();
+  const koreanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+  return koreanTime.toISOString();
+}
+
 // 대출 요청 생성
-app.get('/createLoan', async function (req, res) {
-  const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+app.post('/createLoan', async function (req, res) {
+  const { id, lender, borrower, amount, durationDays, interestRate, contractImage } = req.body;
   const args = [id, lender, borrower, amount, durationDays, interestRate];
 
   try {
     const txId = await sdk.send(false, 'CreateLoanRequest', args); // txId 반환됨
 
-    // 체인 호출 성공 → Supabase에 저장
+    // 체인 호출 성공 → Supabase에 해시 정보만 저장
     const { error } = await supabase.from('loans').insert([{
       id: id,                    // 체인에 저장한 loan ID를 그대로 사용
       loan_chain_id: id,         // 체인에 저장한 loan ID
       tx_hash: txId,             // 블록체인 트랜잭션 ID
-      created_at: new Date().toISOString(),
-      pool_id: null              // pool 없는 경우 null
+      created_at: getKoreanTime() // 한국 시간으로 저장
     }]);
 
     if (error) {
@@ -247,7 +253,10 @@ app.get('/createLoan', async function (req, res) {
       return res.status(500).json({ error: 'DB 저장 실패' });
     }
 
-    return res.json({ message: 'Loan created on chain and DB', txId });
+    return res.json({ 
+      message: 'Loan created on chain and DB', 
+      txId
+    });
 
   } catch (err) {
     console.error('❌ 체인 오류:', err.message);
@@ -793,7 +802,7 @@ app.listen(PORT, HOST, async () => {
 // ================= 친구 API ==================
 
 // 친구 추가 요청
-app.post('/api/friends/add', async (req, res) => {
+app.post('/api/friends/add', authenticateUser, async (req, res) => {
   const { userId, friendEmail } = req.body;
 
   try {
@@ -990,8 +999,147 @@ app.patch('/api/friends/request', async (req, res) => {
   }
 });
 
+// 트랜잭션 해시로 거래 내역 조회
+app.get('/api/transaction/:txHash', async (req, res) => {
+  try {
+    const { txHash } = req.params;
+    if (!txHash) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '트랜잭션 해시가 필요합니다.' 
+      });
+    }
+
+    // 1. Supabase에서 해당 트랜잭션 해시로 대출 정보 조회
+    const { data: loan, error: loanError } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('tx_hash', txHash)
+      .single();
+
+    if (loanError) {
+      console.error('대출 정보 조회 실패:', loanError);
+      return res.status(404).json({ 
+        success: false, 
+        message: '해당 트랜잭션의 대출 정보를 찾을 수 없습니다.' 
+      });
+    }
+
+    // 2. 체인코드에서 트랜잭션 정보 조회
+    const chainResult = await sdk.send(true, 'QueryLoanRequest', [loan.id]);
+    
+    // 3. 응답 데이터 구성
+    const response = {
+      success: true,
+      transaction: {
+        txHash: loan.tx_hash,
+        contractHash: loan.contract_hash,
+        createdAt: loan.created_at,
+        loanInfo: chainResult,
+        // 추가 정보
+        verification: {
+          isContractValid: loan.contract_hash ? true : false,
+          isTransactionValid: true, // 체인코드에서 조회 성공하면 유효한 것
+          lastVerified: new Date().toISOString()
+        }
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('트랜잭션 조회 실패:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '트랜잭션 조회 중 오류가 발생했습니다.',
+      error: error.message 
+    });
+  }
+});
+
 // 마지막에만 index.html 반환 (SPA 대응용)
-// “캐치올” 라우트: 위에서 매칭되지 않은 모든 GET 요청에 대해 index.html을 내보낸다
 app.get('*', function (req, res) {
   res.sendFile(path.join(clientPath, 'index.html'));
+});
+
+// 계약서 해시 생성 함수
+async function generateContractHash(contractImage) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    hash.update(contractImage);
+    resolve(hash.digest('hex'));
+  });
+}
+
+// 계약서 다운로드 및 해시 검증
+app.get('/api/contract/verify', async (req, res) => {
+  const { loanId, contractImage } = req.query;
+  
+  try {
+    // 1. loans 테이블에서 계약서 해시 조회
+    const { data: loan, error } = await supabase
+      .from('loans')
+      .select('contract_hash')
+      .eq('id', loanId)
+      .single();
+      
+    if (error) throw error;
+    
+    // 2. 현재 계약서 이미지의 해시 생성
+    const currentHash = await generateContractHash(contractImage);
+    
+    // 3. 해시 비교
+    const isValid = currentHash === loan.contract_hash;
+    
+    res.json({ 
+      isValid,
+      message: isValid ? '계약서가 유효합니다.' : '계약서가 조작되었습니다.'
+    });
+  } catch (err) {
+    console.error('계약서 검증 중 오류:', err);
+    res.status(500).json({ error: '계약서 검증 중 오류가 발생했습니다.' });
+  }
+});
+
+// 계약서 저장 및 해시 생성
+app.post('/api/contract/save', async (req, res) => {
+  try {
+    const { loanId, contractImage } = req.body;
+    if (!loanId || !contractImage) {
+      return res.status(400).json({ message: '대출 ID와 계약서 이미지가 필요합니다.' });
+    }
+
+    // 계약서 해시 생성
+    const contractHash = await generateContractHash(contractImage);
+    console.log('생성된 계약서 해시:', contractHash);
+
+    // Supabase에 해시 저장
+    const { data, error } = await supabase
+      .from('loans')
+      .update({ 
+        contract_hash: contractHash,
+        created_at: getKoreanTime()
+      })
+      .eq('id', loanId)
+      .select();
+
+    if (error) {
+      console.error('Supabase 업데이트 에러:', error);
+      throw error;
+    }
+
+    console.log('계약서 해시 저장 성공:', data);
+    res.json({ 
+      success: true,
+      message: '계약서 해시가 저장되었습니다.', 
+      contractHash,
+      data 
+    });
+  } catch (error) {
+    console.error('계약서 해시 저장 실패:', error);
+    res.status(500).json({ 
+      success: false,
+      message: '계약서 해시 저장 실패',
+      error: error.message 
+    });
+  }
 });
