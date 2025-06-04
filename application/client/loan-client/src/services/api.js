@@ -218,7 +218,7 @@ export async function getUserProfile(userId) {
 }
 
 // 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
-export const fetchAcceptedFriendsWithWallets = async (userId, supabase) => {
+export const fetchAcceptedFriendsWithWallets = async (userId) => {
     if (!userId) return [];
 
     // 1. 친구 요청 (내가 보낸 것)

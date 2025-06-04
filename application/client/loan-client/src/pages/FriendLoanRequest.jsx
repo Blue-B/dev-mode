@@ -5,18 +5,11 @@ import { Home, Wallet } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fetchAcceptedFriendsWithWallets, getUserProfile } from '../services/api';
 import { useAuth } from '../contexts/AuthContext'; 
-import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { addMonths, format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import LoanAgreement from "./contract/LoanAgreement";
 import { differenceInDays } from 'date-fns';
-
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
 
 export default function FriendLoanRequest() {
   const navigate = useNavigate();
@@ -57,7 +50,7 @@ export default function FriendLoanRequest() {
   useEffect(() => {
     const loadFriendWallets = async () => {
         try {
-            const profiles = await fetchAcceptedFriendsWithWallets(user?.id, supabase);
+            const profiles = await fetchAcceptedFriendsWithWallets(user?.id);
             setFriends(profiles);
         } catch (err) {
             console.error(err.message);
