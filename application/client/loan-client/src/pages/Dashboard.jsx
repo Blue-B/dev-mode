@@ -1,20 +1,16 @@
 import React, {useState, useEffect, useMemo} from 'react';
 import {
+    getUserWalletAddress ,
     getWalletBalance,
     approveLoan,
     denyLoan,
     queryMyLoans,
-    repayLoan 
+    repayLoan,
+    fetchAcceptedFriendsWithWallets
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import {createClient} from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom'; 
 import { HandHeart } from 'lucide-react';
-
-const supabase = createClient(
-    process.env.REACT_APP_SUPABASE_URL,
-    process.env.REACT_APP_SUPABASE_ANON_KEY
-);
 
 // 1개월 ~ 60개월까지 반복 생성
 const durationOptions = Array.from({
@@ -38,71 +34,36 @@ const Dashboard = () => {
     const [walletAddress, setWalletAddress] = useState('');
     const [balance, setBalance] = useState(0);
     const [loans, setLoans] = useState([]);
+    const [isLoadingLoans, setIsLoadingLoans] = useState(true);
+    const [friendWallets, setFriendWallets] = useState([]); // 친구 프로필 배열 
 
-    const [friendWallets, setFriendWallets] = useState([]);
     const [loadingWallet, setLoadingWallet] = useState(true);
 
     const {user} = useAuth();
     const navigate = useNavigate();
 
-    // 로그인한 사용자 잔액 가져오기
-    useEffect(() => {
-        const fetchWalletFromProfile = async () => {
-            if (!user?.id) return;
-            try {
-                const {data, error} = await supabase
-                    .from('profiles')
-                    .select('wallet_id')
-                    .eq('id', user.id)
-                    .single();
-
-                if (error) 
-                    throw error;
-                if (
-                    data
-                        ?.wallet_id
-                ) {
-                    setWalletAddress(data.wallet_id); // 지갑 주소 설정
-                }
-            } catch (err) {
-                console.error('🔍 지갑 주소 조회 실패:', err.message);
-            } finally {
-                setLoadingWallet(false);
-            }
-        };
-
-        fetchWalletFromProfile();
-    }, [user?.id]);
-
-    // walletAddress가 설정되었을 때 잔액 조회
-    useEffect(() => {
-        if (walletAddress) {
-          
-            fetchBalance();
-        }
-    }, [walletAddress]);
-
-    // 1) wallet_id → profile 객체 매핑
-    const profileMap = useMemo(() => {
-        return friendWallets.reduce((acc, profile) => {
-            acc[profile.wallet_id] = profile;
-            return acc;
-        }, {});
-    }, [friendWallets]);
-
-    // 잔액 조회
     const fetchBalance = async () => {
+        if (!user?.id) return;
         try {
-            const result = await getWalletBalance(walletAddress);
-            setBalance(result);
+            const wallet = await getUserWalletAddress(user.id);
+            const balance = await getWalletBalance(wallet);
+            setWalletAddress(wallet);
+            setBalance(balance);
         } catch (error) {
-            console.error('잔액 조회 실패:', error);
-            setBalance(0);
+            console.error('잔액 갱신 실패:', error.message);
+        }finally {
+            setLoadingWallet(false); 
         }
     };
 
+    // 로그인한 사용자 잔액 가져오기
+    useEffect(() => {
+        fetchBalance();
+    }, [user?.id]);
+
     // 내 대출 목록만 가져오기
     const loadMyLoans = async () => {
+        setIsLoadingLoans(true);
         try {
             const result = await queryMyLoans(walletAddress);
             setLoans(
@@ -118,6 +79,8 @@ const Dashboard = () => {
                         ?.error || error.message
             ));
             setLoans([]);
+        }finally {
+            setIsLoadingLoans(false); 
         }
     };
 
@@ -126,6 +89,29 @@ const Dashboard = () => {
             loadMyLoans();
         }
     , [walletAddress]);
+
+    // useMemo: wallet_id → profile 객체 매핑
+    const profileMap = useMemo(() => {
+        return friendWallets.reduce((acc, profile) => {
+            acc[profile.wallet_id] = profile;
+            return acc;
+        }, {});
+    }, [friendWallets]);
+
+    // 친구 목록 불러오는 useEffect
+    useEffect(() => {
+        const loadFriendProfiles = async () => {
+            if (!user?.id) return;
+            try {
+                const friendsWithWallets = await fetchAcceptedFriendsWithWallets(user.id);
+                setFriendWallets(friendsWithWallets);
+            } catch (err) {
+                console.error('🔍 친구 프로필 조회 실패:', err.message);
+            }
+        };
+
+        loadFriendProfiles();
+    }, [user?.id]);
 
     // 대출 승인
     const handleApproveLoan = async (loanId) => {
@@ -176,6 +162,8 @@ const Dashboard = () => {
             alert('상환 중 오류가 발생했습니다.');
         }finally {
             setIsRequesting(false);
+            await fetchBalance(); // 상환 후 잔액 다시 조회
+
         }
     };
 
@@ -265,6 +253,10 @@ const Dashboard = () => {
             {/* 최근 활동 */}
             <div>
                 <h2 className="mb-4 text-lg font-semibold sm:text-xl">최근 활동</h2>
+                
+                {isLoadingLoans ? (
+                    <p className="text-gray-500">불러오는 중...</p>
+                ) : (
                 <div className="space-y-4">
                     {loans.map(loan => {
                         const isLender = loan.lender === walletAddress;
@@ -336,7 +328,7 @@ const Dashboard = () => {
                                             <button
                                                 onClick={() => handleRepayLoan(loan.id)}
                                                 disabled={isRequesting}
-                                                className={`px-2 py-1 text-xs text-red-600 rounded-md sm:text-sm bg-red-50 sm:px-3 ${isRequesting ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+                                                className={`px-2 py-1 text-xs text-white rounded-md sm:text-sm sm:px-3 ${isRequesting ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
                                             >
                                                 {isRequesting ? '상환 중...' : '상환하기'}
                                             </button>
@@ -360,6 +352,7 @@ const Dashboard = () => {
                         );
                     })}
                 </div>
+                )}
             </div>
         </div>
     );
