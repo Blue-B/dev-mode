@@ -13,7 +13,19 @@ function joinChannel() {
  echo "채널 조인 peer0 Org1"
  FILE="channel.block"
 
- peer channel join -b $FILE
+ # 첫 번째 시도
+peer channel join -b $FILE || {
+  echo "[ 경고] 채널 조인 실패. 5초 대기 후 재시도..."
+  sleep 5
+  peer channel join -b $FILE || {
+    echo "[ 에러] 채널 조인 2회 실패. 스크립트를 종료합니다."
+    exit 1
+  }
+}
+
+# 체인코드 승인 전에 대기
+echo "⏳ 채널 조인 후 안정화를 위해 3초 대기..."
+sleep 3
 }
 
 function joinChannelProd() {

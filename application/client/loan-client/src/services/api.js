@@ -257,35 +257,71 @@ export const fetchAcceptedFriendsWithWallets = async (userId, supabase) => {
     return profiles.filter(profile => profile.wallet_id);
 };
 
-// 친구 추가 요청
-export const sendFriendRequest = async (friendId) => {
+/**
+ * 친구 추가 요청
+ * - Express 서버: POST /api/friends/add
+ * @param {string} userId
+ * @param {string} friendEmail
+ */
+export async function sendFriendRequest(userId, friendEmail) {
   try {
-    const response = await api.post('/friends/add', { friendId });
+    const response = await api.post('/api/friends/add', {
+      userId,
+      friendEmail,
+    });
     return response.data;
   } catch (error) {
-    console.error('친구 추가 요청 실패:', error);
+    console.error('[app.js] sendFriendRequest 실패:', error);
     throw error;
   }
-};
+}
 
-// 친구 목록 조회
-export const getFriendList = async () => {
+/**
+ * 친구 목록 조회
+ * - Express 서버: GET /api/friends
+ * @param {string} userId
+ */
+export async function getFriendList(userId) {
   try {
-    const response = await api.get('/friends');
-    return response.data.friends;
+    const response = await api.get('/api/friends');
+    return response.data.friends || [];
   } catch (error) {
-    console.error('친구 목록 조회 실패:', error);
+    console.error('[app.js] getFriendList 실패:', error);
     throw error;
   }
-};
+}
 
-// 친구 요청 수락/거절
-export const handleFriendRequest = async (requestId, status) => {
+/**
+ * 받은 친구 요청 조회
+ * - Express 서버: GET /api/friends/received
+ * @param {string} userId
+ */
+export async function getReceivedRequests() {
   try {
-    const response = await api.patch('/friends/request', { requestId, status });
+    const response = await api.get('/api/friends/received');
+    return response.data.requests || [];
+  } catch (error) {
+    console.error('[app.js] getReceivedRequests 실패:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * 친구 요청 수락/거절
+ * - Express 서버: PATCH /api/friends/request
+ * @param {string} requestId
+ * @param {boolean} accept
+ */
+export async function handleFriendRequest(requestId, accept = true) {
+  try {
+    const response = await api.patch('/api/friends/request', {
+      requestId,
+      status: accept ? 'accepted' : 'rejected',
+    });
     return response.data;
   } catch (error) {
-    console.error('친구 요청 처리 실패:', error);
+    console.error('[app.js] handleFriendRequest 실패:', error);
     throw error;
   }
-};
+}
