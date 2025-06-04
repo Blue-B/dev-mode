@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from '../../contexts/AuthContext';
 import { createLoan, getUserProfile } from '../../services/api';
 import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
-import { X, FileText, Edit3, PenTool, Download } from "lucide-react";
+import { X, FileText, PenTool } from "lucide-react";
 
 
 
@@ -26,20 +26,10 @@ export default function LoanAgreement({
     lender: null,
     borrower: null
   });
-  // const location = useLocation();
-  //   console.log("▶ LoanAgreement.location.state:", location.state);
+ 
   const [isRequesting, setIsRequesting] = useState(false);
   const { user } = useAuth();
   const isLoggedIn = !!user;
-
-  // const {
-  //   loanData,
-  //   selectedFriend,
-  //   estimatedRepaymentDate,
-  //   totalRepayment,
-  //   startDate = "-",
-  //   endDate = "-",
-  // } = location.state || {};
   
   const [myProfile, setMyProfile] = useState(null); // 현재 로그인된 사용자의 프로필
    
@@ -195,7 +185,7 @@ export default function LoanAgreement({
                       {signatures.lender ? (
                         <img src={signatures.lender} alt="서명" className="h-4" />
                       ) : (
-                        "김기용"
+                        contractData.borrowerName
                       )}
                     </div>
                   </div>
