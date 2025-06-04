@@ -721,6 +721,10 @@ const LoanShim = class {
     return Buffer.from(JSON.stringify(userLoans));
   }
 
+
+  
+
+
   // =========================
   // (Optional) WalletExists, LoanRequestExists 메서드는 내부에서 직접 stub.getState로 체크하므로 생략 가능
   // =========================

@@ -398,11 +398,76 @@ app.get('/denyLoan', async (req, res) => {
   }
 });
 
+async function queryLoan(id) {
+  const result = await sdk.send(true, 'QueryLoanRequest', [id]);
+  return typeof result === 'string' ? JSON.parse(result) : result;
+}
+
 // 대출 상환
-app.get('/repayLoan', function (req, res) {
-    let { id } = req.query;
-    let args = [id];
-    sdk.send(false, 'RepayLoan', args, res);
+// app.get('/repayLoan', function (req, res) {
+//     let { id } = req.query;
+//     let args = [id];
+//     sdk.send(false, 'RepayLoan', args, res);
+// });
+app.post('/loan/repay', async (req, res) => {
+  const { loanId } = req.body;
+  console.log('[RepayLoan] 상환 요청 도착 → loanId:', loanId);
+
+  try {
+    // 체인코드 트랜잭션 실행
+    const result = await sdk.send(false, 'RepayLoan', [loanId], res);
+    console.log('[RepayLoan] 체인 응답:', result);
+
+    // 체인에서 loan 정보 조회
+    const loan = await queryLoan(loanId);
+    const parsed = typeof loan === 'string' ? JSON.parse(loan) : loan;
+
+
+    if (parsed.status === 'Repaid') {
+      return res.json({ success: true, message: '이미 상환된 대출입니다.' });
+    }
+    
+    // 이자 계산
+    const amount = Number(parsed.amount);
+    const rate = Number(parsed.interestRate);
+    const days = Number(parsed.durationDays);
+    const interest = Math.floor((amount * rate * days) / (365 * 100));
+    const totalAmount = amount + interest;
+
+    
+    console.log(`🟢 [RepayLoan] ${parsed.borrower} → ${parsed.lender}에게 ${totalAmount} 상환 처리`);
+
+    // Supabase에 상환 기록 저장
+    const { error: insertError } = await supabase.from('wallet_transactions').insert([
+      {
+        user_id: parsed.borrower,
+        type: 'repay',
+        amount: -totalAmount,
+        related_user_id: parsed.lender,
+        loan_id: parsed.id,
+        memo: '친구 대출 상환 - 출금',
+      },
+      {
+        user_id: parsed.lender,
+        type: 'repay_received',
+        amount: totalAmount,
+        related_user_id: parsed.borrower,
+        loan_id: parsed.id,
+        memo: '친구 대출 상환 - 입금',
+      },
+    ]);
+
+    if (insertError) {
+      console.error('📛 Supabase 상환 기록 실패:', insertError);
+      return res.status(500).json({ error: '상환은 완료되었으나 거래 기록 저장 실패' });
+    }
+
+    res.json({ success: true, result: result.toString() });
+
+  } catch (err) {
+    console.error('[RepayLoan] 체인코드 실행 오류:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 단일 대출 요청 조회
@@ -411,23 +476,19 @@ app.get('/repayLoan', function (req, res) {
 //     let args = [id];
 //     sdk.send(true, 'QueryLoanRequest', args, res);
 // });
-app.get('/queryLoan', async function (req, res) {
-  const { id } = req.query;
-  if (!id) return res.status(400).json({ error: 'Loan ID가 필요합니다.' });
+// app.get('/queryLoan', async function (req, res) {
+//   const { id } = req.query;
+//   if (!id) return res.status(400).json({ error: 'Loan ID가 필요합니다.' });
 
-  try {
-    const result = await sdk.send(true, 'QueryLoanRequest', [id]);
-    return res.json(result);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
+//   try {
+//     const result = await sdk.send(true, 'QueryLoanRequest', [id]);
+//     return res.json(result);
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message });
+//   }
+// });
 
 // 전체 대출 요청 조회
-// app.get('/queryAllLoans', function (req, res) {
-//     sdk.send(true, 'QueryAllLoanRequests', [], res);
-// });
 app.get('/queryAllLoans', async (req, res) => {
   try {
     const result = await sdk.send(true, 'QueryAllLoanRequests', []);
