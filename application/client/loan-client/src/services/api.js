@@ -271,7 +271,13 @@ export async function sendFriendRequest(userId, friendEmail) {
     });
     return response.data;
   } catch (error) {
-    console.error('[app.js] sendFriendRequest 실패:', error);
+   console.error('[app.js] sendFriendRequest 실패:', {
+      url: error.config.url,
+      method: error.config.method,
+      data: error.config.data,
+      responseData: error.response?.data,
+      responseStatus: error.response?.status,
+    });
     throw error;
   }
 }

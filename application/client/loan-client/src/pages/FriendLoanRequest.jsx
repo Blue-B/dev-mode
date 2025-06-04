@@ -3,10 +3,15 @@ import { HandCoins, ChevronLeft, Edit, Search } from "lucide-react";
 import { CheckCircle } from "lucide-react";
 import { Home, Wallet } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { fetchAcceptedFriendsWithWallets, getUserWalletAddress, getUserProfile } from '../services/api';
+import { fetchAcceptedFriendsWithWallets, getUserProfile } from '../services/api';
 import { useAuth } from '../contexts/AuthContext'; 
 import { createClient } from '@supabase/supabase-js';
-import {v4 as uuidv4} from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
+import { addMonths, format } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import LoanAgreement from "./contract/LoanAgreement";
+import { differenceInDays } from 'date-fns';
+
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
@@ -27,6 +32,7 @@ export default function FriendLoanRequest() {
   
   const [friends, setFriends] = useState([]);
   const [userWalletAddress, setUserWalletAddress] = useState('');
+  const [loanAgreementData, setLoanAgreementData] = useState(null);
 
   
   useEffect(() => {
@@ -76,21 +82,19 @@ export default function FriendLoanRequest() {
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Calculate estimated repayment date whenever loanTermMonths or currentDate changes
+  // 오늘 기준으로 “n개월 뒤” 계산한 문자열 (UI에 표시할 때도 사용 가능)
   useEffect(() => {
-    if (typeof loanTermMonths === 'number' && loanTermMonths > 0) {
-      const date = new Date(currentDate);
-      date.setMonth(date.getMonth() + loanTermMonths);
-      const year = date.getFullYear();
-      // Month is 0-indexed, add 1
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      // Format the date as YYYY. M. D.
-      setEstimatedRepaymentDate(`${year}. ${month}. ${day}.`);
-    } else {
-      setEstimatedRepaymentDate('날짜 미정'); // Or any default text for direct input/invalid period
-    }
-  }, [loanTermMonths, currentDate]); // Depend on loanTermMonths and currentDate
+      if (loanTermMonths > 0) {
+        // date-fns의 addMonths 사용 → 말일/윤달을 올바르게 처리
+        const repayDate = addMonths(currentDate, loanTermMonths);
+        const year = repayDate.getFullYear();
+        const month = repayDate.getMonth() + 1; // 0-based → 1~12 숫자
+        const day = repayDate.getDate();
+        setEstimatedRepaymentDate(`${year}. ${month}. ${day}.`);
+      } else {
+        setEstimatedRepaymentDate("날짜 미정");
+      }
+    }, [loanTermMonths, currentDate]);
 
   const selectAmount = (amount) => {
     setLoanAmount(amount.toLocaleString());
@@ -159,12 +163,20 @@ export default function FriendLoanRequest() {
 
       const loanId = uuidv4();
       const amount = parseInt(loanAmount.replace(/,/g, ''), 10);
-      const durationMonths = loanTermMonths;
-      const durationDays = durationMonths * 30;
 
-      // 종료일 계산
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + durationMonths);
+      const today = new Date();
+      const durationMonths = Number(loanTermMonths); // 예: 12
+
+      // date-fns의 addMonths를 쓰면 자동으로 말일/윤달을 올바르게 처리해 줌
+      const endDate = addMonths(today, durationMonths);
+
+      // 한국어 형식으로 포맷팅
+      const formattedToday = format(today, 'yyyy년 M월 d일', { locale: ko });
+      const formattedEndDate = format(endDate, 'yyyy년 M월 d일', { locale: ko });
+
+      // 정확한 일수 계산 (differenceInDays 사용)
+      const actualDurationDays = differenceInDays(endDate, today);
+      // 예: 윤달 포함 시 366, 아니면 365 등 자동 계산
 
       const loanData = {
         id: loanId,
@@ -172,7 +184,7 @@ export default function FriendLoanRequest() {
         borrower: userWalletAddress,          // 내가 차입자
         amount: amount,
         interestRate: parseFloat(interestRate),
-        durationDays: durationDays,
+        durationDays: actualDurationDays,
         durationMonths: durationMonths,
         endDateTimestamp: endDate.getTime(),
         message: purposeMessage || "",
@@ -180,18 +192,18 @@ export default function FriendLoanRequest() {
 
       // await createLoan(loanData);
 
+      setLoanAgreementData({
+        loanData,
+        selectedFriend,
+        estimatedRepaymentDate,
+        totalRepayment: calculateTotalRepayment(),
+        startDate: formattedToday,
+        endDate: formattedEndDate
+      });
+
       // alert('대출 정보가 생성됐습니다.');
       setCurrentStep(3); // 계약서 작성
 
-       navigate('/constract', {
-        state: {
-          currentStep: 3, // 계약서 작성
-          loanData,
-          selectedFriend,
-          estimatedRepaymentDate,
-          totalRepayment: calculateTotalRepayment()
-        }
-    });
     } catch (error) {
       console.error('대출 정보 생성 실패:', error);
       alert('대출 정보 생성 실패: ' + (error?.response?.data?.message || error.message));
@@ -235,7 +247,7 @@ export default function FriendLoanRequest() {
             <span className={`ml-2 text-sm ${currentStep === 3 ? 'text-blue-500 font-semibold' : 'text-gray-400'}`}>계약서 작성</span>
           </div>
           <div className="flex items-center">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 3 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'}`}>3</div>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 4 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'}`}>4</div>
             <span className={`ml-2 text-sm ${currentStep === 4 ? 'text-blue-500 font-semibold' : 'text-gray-400'}`}>요청 전송</span>
           </div>
         </div>
@@ -604,6 +616,19 @@ export default function FriendLoanRequest() {
                 </div>
 
              </div>
+        )}
+
+        {currentStep === 3 && loanAgreementData && (
+          <LoanAgreement
+            loanData={loanAgreementData.loanData}
+            selectedFriend={loanAgreementData.selectedFriend}
+            estimatedRepaymentDate={loanAgreementData.estimatedRepaymentDate}
+            totalRepayment={loanAgreementData.totalRepayment}
+            startDate={loanAgreementData.startDate}
+            endDate={loanAgreementData.endDate}
+            goToPreviousStep={() => setCurrentStep(2)}
+            goToNextStep={() => setCurrentStep(4)}
+          />
         )}
 
 
