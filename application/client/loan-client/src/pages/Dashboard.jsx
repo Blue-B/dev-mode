@@ -1,22 +1,16 @@
 import React, {useState, useEffect, useMemo} from 'react';
 import {
-    createWallet,
+    getUserWalletAddress ,
     getWalletBalance,
-    createLoan,
     approveLoan,
     denyLoan,
-    queryMyLoans
+    queryMyLoans,
+    repayLoan,
+    fetchAcceptedFriendsWithWallets
 } from '../services/api';
-import {v4 as uuidv4} from 'uuid';
-import {useAuth} from '../contexts/AuthContext';
-import {createClient} from '@supabase/supabase-js';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom'; 
 import { HandHeart } from 'lucide-react';
-
-const supabase = createClient(
-    process.env.REACT_APP_SUPABASE_URL,
-    process.env.REACT_APP_SUPABASE_ANON_KEY
-);
 
 // 1개월 ~ 60개월까지 반복 생성
 const durationOptions = Array.from({
@@ -36,202 +30,40 @@ const formatAmount = (amount) => {
 };
 
 const Dashboard = () => {
+    const [isRequesting, setIsRequesting] = useState(false);
     const [walletAddress, setWalletAddress] = useState('');
     const [balance, setBalance] = useState(0);
     const [loans, setLoans] = useState([]);
-    const [newLoan, setNewLoan] = useState({
-        lender: '', // 대출자 지갑 주소
-        borrower: '', // 차입자 지갑 주소
-        amount: 0, //대출 금액
-        durationDays: 0, //상환 기간
-        interestRate: 0, //이자율
-        endDateTimestamp: null // 상환일
+    const [isLoadingLoans, setIsLoadingLoans] = useState(true);
+    const [friendWallets, setFriendWallets] = useState([]); // 친구 프로필 배열 
 
-    });
-    const [selectedMonths, setSelectedMonths] = useState(0); // 상환 기간
-    const [calculatedEndDate, setCalculatedEndDate] = useState(null);
-    const [friendWallets, setFriendWallets] = useState([]);
     const [loadingWallet, setLoadingWallet] = useState(true);
 
     const {user} = useAuth();
     const navigate = useNavigate();
 
+    const fetchBalance = async () => {
+        if (!user?.id) return;
+        try {
+            const wallet = await getUserWalletAddress(user.id);
+            const balance = await getWalletBalance(wallet);
+            setWalletAddress(wallet);
+            setBalance(balance);
+        } catch (error) {
+            console.error('잔액 갱신 실패:', error.message);
+        }finally {
+            setLoadingWallet(false); 
+        }
+    };
+
     // 로그인한 사용자 잔액 가져오기
     useEffect(() => {
-        const fetchWalletFromProfile = async () => {
-            if (!user?.id) return;
-            try {
-                const {data, error} = await supabase
-                    .from('profiles')
-                    .select('wallet_id')
-                    .eq('id', user.id)
-                    .single();
-
-                if (error) 
-                    throw error;
-                if (
-                    data
-                        ?.wallet_id
-                ) {
-                    setWalletAddress(data.wallet_id); // 지갑 주소 설정
-                }
-            } catch (err) {
-                console.error('🔍 지갑 주소 조회 실패:', err.message);
-            } finally {
-                setLoadingWallet(false);
-            }
-        };
-
-        fetchWalletFromProfile();
+        fetchBalance();
     }, [user?.id]);
-
-    // walletAddress가 설정되었을 때 잔액 조회
-    useEffect(() => {
-        if (walletAddress) {
-            setNewLoan(prev => ({
-                ...prev,
-                borrower: walletAddress
-            }));
-            fetchBalance();
-        }
-    }, [walletAddress]);
-
-    // 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
-    useEffect(() => {
-        const fetchFriendWallets = async () => {
-            if (!user?.id) return;
-            
-            // 1. 내가 보낸 요청 + 받은 요청 모두 조회
-            const {data: sent, error: sentError} = await supabase
-                .from('friends')
-                .select('friend_user_id')
-                .eq('user_id', user.id)
-                .eq('status', 'accepted');
-
-            const {data: received, error: receivedError} = await supabase
-                .from('friends')
-                .select('user_id')
-                .eq('friend_user_id', user.id)
-                .eq('status', 'accepted');
-
-            if (sentError || receivedError) {
-                console.error('친구 목록 조회 실패:', sentError || receivedError);
-                return;
-            }
-
-            // 2. 상대방 ID 목록 합치기
-            const friendIds = [
-                ...sent.map(f => f.friend_user_id),
-                ...received.map(f => f.user_id)
-            ];
-
-            // 3. 상대방 프로필에서 지갑 포함 조회
-            const {data: profiles, error: profileError} = await supabase
-                .from('profiles')
-                .select('id, name, email, wallet_id')
-                .in ('id', friendIds);
-
-            if (profileError) {
-                console.error('친구 프로필 조회 실패:', profileError);
-                return;
-            }
-
-            setFriendWallets(profiles.filter(p => p.wallet_id));
-        };
-
-        fetchFriendWallets();
-    }, [user?.id]);
-
-    // 1) wallet_id → profile 객체 매핑
-    const profileMap = useMemo(() => {
-        return friendWallets.reduce((acc, profile) => {
-            acc[profile.wallet_id] = profile;
-            return acc;
-        }, {});
-    }, [friendWallets]);
-
-    // 잔액 조회
-    const fetchBalance = async () => {
-        try {
-            const result = await getWalletBalance(walletAddress);
-            setBalance(result);
-        } catch (error) {
-            console.error('잔액 조회 실패:', error);
-            setBalance(0);
-        }
-    };
-
-    // 대출 요청 생성
-    const handleCreateLoan = async () => {
-        try {
-            const {lender, borrower, amount, interestRate} = newLoan;
-
-            if (!lender || !borrower || !amount || !selectedMonths || !interestRate) {
-                alert('모든 필드를 입력해주세요.');
-                return;
-            }
-
-            if (lender === borrower) {
-                alert('대출자와 차입자는 다른 지갑이어야 합니다.');
-                return;
-            }
-
-            const id = uuidv4();
-            const durationDays = selectedMonths * 30;
-            const endDate = calculateEndDate(new Date(), selectedMonths);
-            const endDateTimestamp = endDate.getTime();
-
-            const completeLoan = {
-                ...newLoan,
-                id,
-                durationDays, // 상환 기간
-                endDateTimestamp //만기일 타임스탬프
-            };
-
-            await createLoan(completeLoan); // API호출
-            alert('대출 요청이 생성되었습니다!');
-            await loadMyLoans();
-
-            setNewLoan({
-                lender: '',
-                borrower: '',
-                amount: 0,
-                durationDays: 0,
-                interestRate: 0,
-                endDateTimestamp: null
-            });
-            setSelectedMonths(0);
-            setCalculatedEndDate(null);
-        } catch (error) {
-            console.error('대출 요청 생성 실패:', error);
-            alert('대출 요청 생성 실패: ' + (
-                error.response
-                    ?.data
-                        ?.message || error.message
-            ));
-        }
-    };
-
-    // 개월 수 → 종료일 계산 함수
-    const calculateEndDate = (startDate, months) => {
-        const end = new Date(startDate);
-        end.setMonth(end.getMonth() + months);
-        return end;
-    };
-
-    const handleDurationChange = (e) => {
-        const months = parseInt(e.target.value);
-        setSelectedMonths(months);
-        if (!isNaN(months)) {
-            const end = calculateEndDate(new Date(), months);
-            setCalculatedEndDate(end);
-        } else {
-            setCalculatedEndDate(null);
-        }
-    };
 
     // 내 대출 목록만 가져오기
     const loadMyLoans = async () => {
+        setIsLoadingLoans(true);
         try {
             const result = await queryMyLoans(walletAddress);
             setLoans(
@@ -247,6 +79,8 @@ const Dashboard = () => {
                         ?.error || error.message
             ));
             setLoans([]);
+        }finally {
+            setIsLoadingLoans(false); 
         }
     };
 
@@ -255,6 +89,29 @@ const Dashboard = () => {
             loadMyLoans();
         }
     , [walletAddress]);
+
+    // useMemo: wallet_id → profile 객체 매핑
+    const profileMap = useMemo(() => {
+        return friendWallets.reduce((acc, profile) => {
+            acc[profile.wallet_id] = profile;
+            return acc;
+        }, {});
+    }, [friendWallets]);
+
+    // 친구 목록 불러오는 useEffect
+    useEffect(() => {
+        const loadFriendProfiles = async () => {
+            if (!user?.id) return;
+            try {
+                const friendsWithWallets = await fetchAcceptedFriendsWithWallets(user.id);
+                setFriendWallets(friendsWithWallets);
+            } catch (err) {
+                console.error('🔍 친구 프로필 조회 실패:', err.message);
+            }
+        };
+
+        loadFriendProfiles();
+    }, [user?.id]);
 
     // 대출 승인
     const handleApproveLoan = async (loanId) => {
@@ -288,50 +145,68 @@ const Dashboard = () => {
         }
     };
 
-    // if (loadingWallet || !walletAddress) {     return (         <div
-    // className="flex items-center justify-center h-[60vh]">         <p
-    // className="text-gray-500 text-lg">🪙 지갑을 불러오는 중입니다. 잠시만 기다려주세요...</p> </div>
-    // ); }
+    const handleRepayLoan = async (loanId) => {
+        if (isRequesting) return;
+
+        setIsRequesting(true);
+        
+        try {
+            const confirm = window.confirm("정말 상환하시겠습니까?");
+            if (!confirm) return;
+
+            await repayLoan(loanId); // 서버에서 체인코드의 RepayLoan 호출
+            alert('상환이 완료되었습니다.');
+            await loadMyLoans(); 
+        } catch (error) {
+            console.error('상환 오류:', error);
+            alert('상환 중 오류가 발생했습니다.');
+        }finally {
+            setIsRequesting(false);
+            await fetchBalance(); // 상환 후 잔액 다시 조회
+
+        }
+    };
+
 
     return (
         <div className="bg-white text-gray-800 p-4 sm:p-8 md:p-12 lg:p-20 text-[15px] sm:text-[17px]">
             {/* 상단 카드 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+            <div className="grid grid-cols-1 gap-4 mb-10 sm:grid-cols-2 lg:grid-cols-4">
                 {/* 신용 점수 카드 */}
-                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
-                    <p className="text-sm text-gray-500 mb-1">신용 점수</p>
+                <div className="p-4 bg-white border shadow-sm sm:p-6 rounded-xl">
+                    <p className="mb-1 text-sm text-gray-500">신용 점수</p>
                     <div className="flex items-baseline">
-                        <p className="text-2xl sm:text-3xl font-bold whitespace-nowrap">
+                        <p className="text-2xl font-bold sm:text-3xl whitespace-nowrap">
                             850
                         </p>
-                        <span className="text-green-500 text-sm sm:text-base ml-2">▲2.5%</span>
+                        <span className="ml-2 text-sm text-green-500 sm:text-base">▲2.5%</span>
                     </div>
                 </div>
 
                 {/* 활성 대출 카드 */}
-                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
-                    <p className="text-sm text-gray-500 mb-1">활성 대출</p>
-                    <p className="text-2xl sm:text-3xl font-bold mb-1">
+                <div className="p-4 bg-white border shadow-sm sm:p-6 rounded-xl">
+                    <p className="mb-1 text-sm text-gray-500">활성 대출</p>
+                    <p className="mb-1 text-2xl font-bold sm:text-3xl">
                         {loans.filter(loan => loan.status === 'Active').length}
                     </p>
-                    <p className="text-sm sm:text-base text-gray-600 truncate">
+                    <p className="text-sm text-gray-600 truncate sm:text-base">
                         총 {formatAmount(loans.filter(loan => loan.status === 'Active')
                             .reduce((sum, loan) => sum + loan.amount, 0))}
                     </p>
                 </div>
 
                 {/* 대출 상환율 카드 */}
-                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
-                    <p className="text-sm text-gray-500 mb-1">대출 상환율</p>
-                    <p className="text-2xl sm:text-3xl font-bold mb-1">98%</p>
+                <div className="p-4 bg-white border shadow-sm sm:p-6 rounded-xl">
+                    <p className="mb-1 text-sm text-gray-500">대출 상환율</p>
+                    <p className="mb-1 text-2xl font-bold sm:text-3xl">98%</p>
                     <p className="text-xs text-gray-400">지난 12개월</p>
                 </div>
 
                 {/* 잔액 카드 */}
-                <div className="p-4 sm:p-6 border rounded-xl bg-white shadow-sm">
-                    <p className="text-sm text-gray-500 mb-1">잔액</p>
+                <div className="p-4 bg-white border shadow-sm sm:p-6 rounded-xl">
+                    <p className="mb-1 text-sm text-gray-500">잔액</p>
                     <div className="flex flex-col">
-                        <p className="text-2xl sm:text-3xl font-bold mb-1">
+                        <p className="mb-1 text-2xl font-bold sm:text-3xl">
                             {formatAmount(balance)}
                         </p>
                         <p className="text-xs text-gray-400">
@@ -344,17 +219,17 @@ const Dashboard = () => {
             {/* 대출 요청 섹션 */}
             <div className="relative flex items-center justify-between bg-gradient-to-r from-blue-500 to-purple-400 text-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 min-h-[180px] sm:min-h-[220px] mb-10 overflow-hidden">
                 {/* 왼쪽 콘텐츠 */}
-                <div className="z-10 space-y-2 sm:space-y-3 max-w-md">
+                <div className="z-10 max-w-md space-y-2 sm:space-y-3">
                     {/* 아이콘 + 제목 */}
-                    <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+                    <div className="flex items-center mb-2 space-x-2 sm:space-x-3 sm:mb-3">
                         <div className="bg-white p-1.5 sm:p-2 rounded-xl flex items-center justify-center shadow-md w-10 h-10 sm:w-12 sm:h-12">
                             <img src={'/dashboard_1.png'} alt="친구에게 대출 요청 아이콘" className="w-6 h-6 sm:w-8 sm:h-8" />
                         </div>
-                        <h1 className="text-lg sm:text-xl font-semibold">친구에게 대출 요청</h1>
+                        <h1 className="text-lg font-semibold sm:text-xl">친구에게 대출 요청</h1>
                     </div>
 
                     {/* 설명 텍스트 */}
-                    <p className="text-sm sm:text-base leading-relaxed opacity-90">
+                    <p className="text-sm leading-relaxed sm:text-base opacity-90">
                         <span className="font-semibold">쉽고 빠르게</span> 친구에게 대출을 요청하세요.<br />
                         요청이 승인되면 즉시 대출이 진행됩니다.
                     </p>
@@ -362,22 +237,26 @@ const Dashboard = () => {
                     {/* 버튼 */}
                     <button
                         onClick={() => navigate('/dashboard/request')}
-                        className="mt-4 sm:mt-6 inline-flex items-center bg-white text-blue-700 px-6 sm:px-8 py-2 sm:py-3 rounded-xl font-semibold shadow-lg hover:bg-gray-100 transition transform hover:scale-105 mb-4 sm:mb-6"
+                        className="inline-flex items-center px-6 py-2 mt-4 mb-4 font-semibold text-blue-700 transition transform bg-white shadow-lg sm:mt-6 sm:px-8 sm:py-3 rounded-xl hover:bg-gray-100 hover:scale-105 sm:mb-6"
                     >
-                        <img src={'/dashboard_2.png'} alt="대출 요청 아이콘" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                        <img src={'/dashboard_2.png'} alt="대출 요청 아이콘" className="w-4 h-4 mr-2 sm:w-5 sm:h-5" />
                         친구 대출 요청하기
                     </button>
                 </div>
 
                 {/* 오른쪽 큰 아이콘 */}
-                <div className="absolute right-4 sm:right-6 bottom-4 sm:bottom-6 opacity-40 text-white hidden md:block">
+                <div className="absolute hidden text-white right-4 sm:right-6 bottom-4 sm:bottom-6 opacity-40 md:block">
                     <HandHeart size={60} className="sm:w-80 sm:h-80" />
                 </div>
             </div>
 
             {/* 최근 활동 */}
             <div>
-                <h2 className="text-lg sm:text-xl font-semibold mb-4">최근 활동</h2>
+                <h2 className="mb-4 text-lg font-semibold sm:text-xl">최근 활동</h2>
+                
+                {isLoadingLoans ? (
+                    <p className="text-gray-500">불러오는 중...</p>
+                ) : (
                 <div className="space-y-4">
                     {loans.map(loan => {
                         const isLender = loan.lender === walletAddress;
@@ -411,11 +290,11 @@ const Dashboard = () => {
                         }
 
                         return (
-                            <div key={loan.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-xl mb-2">
+                            <div key={loan.id} className="flex flex-col justify-between p-3 mb-2 border sm:flex-row sm:items-center sm:p-4 rounded-xl">
                                 {/* 왼쪽: 텍스트 */}
                                 <div className="flex flex-col mb-2 sm:mb-0">
                                     <p className="mb-1 text-sm sm:text-base">{text}</p>
-                                    <p className="text-xs sm:text-sm text-gray-500">
+                                    <p className="text-xs text-gray-500 sm:text-sm">
                                         {formatAmount(loan.amount)} • {loan.durationDays}일
                                     </p>
                                 </div>
@@ -426,30 +305,44 @@ const Dashboard = () => {
                                         <>
                                             <button
                                                 onClick={() => handleApproveLoan(loan.id)}
-                                                className="text-green-600 text-xs sm:text-sm bg-green-50 px-2 sm:px-3 py-1 rounded-md hover:bg-green-100"
+                                                className="px-2 py-1 text-xs text-green-600 rounded-md sm:text-sm bg-green-50 sm:px-3 hover:bg-green-100"
                                             >
                                                 수락
                                             </button>
                                             <button
                                                 onClick={() => handleDenyLoan(loan.id)}
-                                                className="text-red-500 text-xs sm:text-sm bg-red-50 px-2 sm:px-3 py-1 rounded-md hover:bg-red-100"
+                                                className="px-2 py-1 text-xs text-red-500 rounded-md sm:text-sm bg-red-50 sm:px-3 hover:bg-red-100"
                                             >
                                                 거절
                                             </button>
                                         </>
                                     )}
                                     {loan.status === 'Active' && (
-                                        <span className="text-green-600 text-xs sm:text-sm bg-green-50 px-2 sm:px-3 py-1 rounded-md">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="px-2 py-1 text-xs text-green-600 rounded-md sm:text-sm bg-green-50 sm:px-3">
                                             진행중
-                                        </span>
+                                            </span>
+
+                                            {/* 현재 로그인한 유저가 borrower일 때만 상환 버튼 표시 */}
+                                            {loan.borrower === walletAddress && (
+                                            <button
+                                                onClick={() => handleRepayLoan(loan.id)}
+                                                disabled={isRequesting}
+                                                className={`px-2 py-1 text-xs text-white rounded-md sm:text-sm sm:px-3 ${isRequesting ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+                                            >
+                                                {isRequesting ? '상환 중...' : '상환하기'}
+                                            </button>
+                                            )}
+                                        </div>
+                                        
                                     )}
                                     {loan.status === 'Denied' && (
-                                        <span className="text-red-500 text-xs sm:text-sm bg-red-50 px-2 sm:px-3 py-1 rounded-md">
+                                        <span className="px-2 py-1 text-xs text-red-500 rounded-md sm:text-sm bg-red-50 sm:px-3">
                                             거절됨
                                         </span>
                                     )}
                                     {loan.status === 'Repaid' && (
-                                        <span className="text-green-600 text-xs sm:text-sm flex items-center space-x-1">
+                                        <span className="flex items-center space-x-1 text-xs text-green-600 sm:text-sm">
                                             <span className="text-lg sm:text-xl">✔</span>
                                             <span>완료</span>
                                         </span>
@@ -459,6 +352,7 @@ const Dashboard = () => {
                         );
                     })}
                 </div>
+                )}
             </div>
         </div>
     );

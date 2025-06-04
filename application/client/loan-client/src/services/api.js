@@ -104,13 +104,15 @@ export const denyLoan = async (loanId) => {
   }
 };
 
-export const repayLoan = async (id) => {
-    try {
-        const response = await api.get(`/repayLoan?id=${id}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+// 개인 대출 상환
+export const repayLoan = async (loanId) => {
+  try {
+    const response = await api.post('/loan/repay', { loanId }); 
+    return response.data;
+  } catch (error) {
+    console.error('상환 요청 실패:', error);
+    throw error;
+  }
 };
 
 export const queryLoan = async (id) => {
@@ -216,7 +218,7 @@ export async function getUserProfile(userId) {
 }
 
 // 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
-export const fetchAcceptedFriendsWithWallets = async (userId, supabase) => {
+export const fetchAcceptedFriendsWithWallets = async (userId) => {
     if (!userId) return [];
 
     // 1. 친구 요청 (내가 보낸 것)
