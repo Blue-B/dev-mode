@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { HandCoins, ChevronLeft, Edit, Search } from "lucide-react";
+import { ChevronLeft, Edit, Search } from "lucide-react";
 import { CheckCircle } from "lucide-react";
 import { Home, Wallet } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -10,6 +10,8 @@ import { addMonths, format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import LoanAgreement from "./contract/LoanAgreement";
 import { differenceInDays } from 'date-fns';
+import 'react-toastify/dist/ReactToastify.css';
+import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
 export default function FriendLoanRequest() {
   const navigate = useNavigate();
@@ -17,7 +19,11 @@ export default function FriendLoanRequest() {
   const {user} = useAuth();
 
   const [loanAmount, setLoanAmount] = useState("");
+  const [loanAmountError, setLoanAmountError] = useState("");
+
   const [interestRate, setInterestRate] = useState(5);
+  const [interestError, setInterestError] = useState("");
+
   const [loanTermMonths, setLoanTermMonths] = useState(12);
   const [borrowerName, setBorrowerName] = useState("나");
   const [purposeMessage, setPurposeMessage] = useState("");
@@ -74,7 +80,37 @@ export default function FriendLoanRequest() {
   const [estimatedRepaymentDate, setEstimatedRepaymentDate] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+ const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({
+    type: "",    // 'success' 또는 'error'
+    title: "",
+    message: ""
+  });
+  const [timerProgress, setTimerProgress] = useState(100);
 
+  // ── Friend 페이지에서 가져온 showNotification 함수 ──
+  const showNotification = (type, title, message) => {
+    setModalContent({ type, title, message });
+    setShowModal(true);
+    setTimerProgress(100);
+
+    const duration = 3000;   // 모달 지속 시간 (ms)
+    const interval = 30;     // Progress Bar 업데이트 빈도 (ms)
+    const steps = duration / interval;
+    const decrement = 100 / steps;
+
+    const timer = setInterval(() => {
+      setTimerProgress((prev) => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          setShowModal(false);
+          return 0;
+        }
+        return prev - decrement;
+      });
+    }, interval);
+  };
+  
   // 오늘 기준으로 “n개월 뒤” 계산한 문자열 (UI에 표시할 때도 사용 가능)
   useEffect(() => {
       if (loanTermMonths > 0) {
@@ -93,6 +129,26 @@ export default function FriendLoanRequest() {
     setLoanAmount(amount.toLocaleString());
   };
 
+  const handleLoanAmountChange = (e) => {
+    const value = e.target.value;
+    const numberValue = parseInt(value.replace(/,/g, ""), 10);
+
+    if (!value || isNaN(numberValue)) {
+      setLoanAmount("");
+      setLoanAmountError("");
+      return;
+    }
+
+    if (numberValue < 10000) {
+      setLoanAmountError("최소 대출 금액은 10,000원 이상이어야 합니다.");
+    } else {
+      setLoanAmountError("");
+    }
+
+    setLoanAmount(value);
+  };
+
+
   const selectTerm = (term) => {
     setLoanTermMonths(term);
   };
@@ -107,8 +163,23 @@ export default function FriendLoanRequest() {
   };
 
   const handleInterestRateChange = (e) => {
+    const inputValue = e.target.value;
+
+    // 공백이나 잘못된 숫자 입력 방지
+    if (inputValue === "" || isNaN(inputValue)) {
+      setInterestRate("");
+      setInterestError("");
+      return;
+    }
+    
     const value = parseFloat(e.target.value);
-    setInterestRate(isNaN(value) ? 0 : value);
+    setInterestRate(value); 
+    
+    if (value > 20) {
+      setInterestError("이자율은 20%를 초과할 수 없습니다.");
+    } else {
+      setInterestError("");
+    }
   };
 
   const handleInterestRateBlur = () => {
@@ -123,6 +194,13 @@ export default function FriendLoanRequest() {
 
   // Function to go to the next step
   const goToNextStep = () => {
+    if (currentStep === 1) {
+      if (loanAmountError || interestError || !loanAmount || !interestRate) {
+      // 기존 Toast 대신 showNotification 사용
+        showNotification('error', '입력 오류', '대출 조건을 올바르게 입력해주세요!');        return;
+      }
+    }
+
     setCurrentStep(currentStep + 1);
   };
 
@@ -144,10 +222,11 @@ export default function FriendLoanRequest() {
    // 대출 요청 생성
   const handleCreateLoan = async () => {
     try {
-      if (!userWalletAddress || !selectedFriend?.wallet_id || !loanAmount || !loanTermMonths || !interestRate) {
-        alert('모든 필드를 입력해주세요.');
+      if (loanAmountError || interestError || !loanAmount || !interestRate) {
+          showNotification('error', '입력 오류', '대출 조건을 다시 확인해주세요!');
         return;
       }
+
 
       if (userWalletAddress === selectedFriend.wallet_id) {
         alert('대출자와 차입자는 같은 지갑일 수 없습니다.');
@@ -183,8 +262,6 @@ export default function FriendLoanRequest() {
         message: purposeMessage || "",
       };
 
-      // await createLoan(loanData);
-
       setLoanAgreementData({
         loanData,
         selectedFriend,
@@ -194,19 +271,63 @@ export default function FriendLoanRequest() {
         endDate: formattedEndDate
       });
 
-      // alert('대출 정보가 생성됐습니다.');
       setCurrentStep(3); // 계약서 작성
 
     } catch (error) {
       console.error('대출 정보 생성 실패:', error);
-      alert('대출 정보 생성 실패: ' + (error?.response?.data?.message || error.message));
+      showNotification('error', '생성 실패', error?.response?.data?.message || error.message);
+
     }
 
   };
 
 
   return (
+    <>
+  
     <div className="min-h-screen bg-gray-50" style={{ maxWidth: '600px', margin: '0 auto' }}>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* 뒤 배경 어둡게 */}
+          <div
+            className="fixed inset-0 bg-black opacity-30"
+            onClick={() => setShowModal(false)}
+          ></div>
+
+          <div className="relative w-full max-w-sm p-6 mx-4 transition-all transform bg-white rounded-lg shadow-xl">
+            {/* ─────────── 프로그래스 바 컨테이너 ─────────── */}
+            <div className="absolute top-0 left-0 w-full h-1 overflow-hidden bg-gray-200 rounded-t-lg">
+              <div
+                className="h-full transition-all ease-linear bg-blue-500"
+                style={{ width: `${timerProgress}%`, transitionDuration: '30ms' }}
+              />
+            </div>
+            {/* ─────────── 닫기 버튼(X) ─────────── */}
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute text-gray-400 top-2 right-2 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+            {/* ─────────── 아이콘 + 텍스트 영역 ─────────── */}
+            <div className="flex items-center gap-3 mt-1">
+              {modalContent.type === 'success' ? (
+                <CheckCircleIcon className="w-8 h-8 text-green-500" />
+              ) : (
+                <ExclamationCircleIcon className="w-8 h-8 text-red-500" />
+              )}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {modalContent.title}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {modalContent.message}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="p-6 bg-white">
         <div className="flex items-center mb-3">
@@ -275,15 +396,18 @@ export default function FriendLoanRequest() {
                   </div>
 
                   <div className="mb-4">
-                <input
-                      type="text"
-                      value={loanAmount || ""}
-                      onChange={(e) => setLoanAmount(e.target.value)}
-                      placeholder="대출할 금액을 입력해주세요"
-                      className="w-full pb-2 text-lg text-right text-gray-600 placeholder-gray-400 bg-transparent border-0 border-b-2 border-gray-200 focus:outline-none focus:border-blue-500"
-                    />
+                    <input
+                          type="text"
+                          value={loanAmount || ""}
+                          onChange={handleLoanAmountChange}
+                          placeholder="대출할 금액을 입력해주세요"
+                          className="w-full pb-2 text-lg text-right text-gray-600 placeholder-gray-400 bg-transparent border-0 border-b-2 border-gray-200 focus:outline-none focus:border-blue-500"
+                        />
                     <div className="mt-1 text-sm text-right text-blue-500">KRW</div>
-                  </div>
+                    {loanAmountError && (
+                        <p className="mt-1 text-sm text-red-500">{loanAmountError}</p>
+                      )}
+                    </div>
 
                   {/* Amount Buttons */}
                   <div className="grid grid-cols-2 gap-3 mb-6">
@@ -329,12 +453,18 @@ export default function FriendLoanRequest() {
                       <span className="text-sm font-medium text-gray-700">희망 이자율</span>
                 </div>
 
+    {interestError && (
+                            <p className="mt-1 text-sm text-red-500">{interestError}</p>
+                          )}
+
                     {/* Display of current interest rate or input field */}
                     <div className="flex items-center mb-3" onDoubleClick={() => setIsEditingInterestRate(true)}>
                       {isEditingInterestRate ? (
+                        <>
                         <input
                           key="interest-rate-input"
                           type="number"
+                          max="20"
                           value={interestRate}
                           onChange={handleInterestRateChange}
                           onBlur={handleInterestRateBlur}
@@ -343,6 +473,8 @@ export default function FriendLoanRequest() {
                           autoFocus
                           step="0.1"
                         />
+                  
+                        </>
                       ) : (
                         <>
                           <span className="text-3xl font-bold text-gray-800">{interestRate.toFixed(1)}</span>
@@ -374,9 +506,9 @@ export default function FriendLoanRequest() {
                           '--tw-ring-offset-color': '#fff'
                         }}
                     />
-
+   
                     <div className="flex justify-between mt-1 text-xs text-gray-500">
-                  <span>무이자 0%</span>
+                      <span>무이자 0%</span>
                       <span>저금리 3%</span>
                       <span>적정금리 5%</span>
                       <span>협의</span>
@@ -683,6 +815,7 @@ export default function FriendLoanRequest() {
                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                  </svg>
                </button>
+               
              </>
           )}
            {currentStep === 2 && (
@@ -720,5 +853,6 @@ export default function FriendLoanRequest() {
         </div>
       </div>
     </div>
+    </>
   );
 }
