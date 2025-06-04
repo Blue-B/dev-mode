@@ -4,7 +4,6 @@ import Header from "./components/Header";
 import Navbar from "./components/Nav";
 import MyPage from "./pages/MyPage";
 import Main from "./pages/Main";
-import Constract from "./pages/Constract";
 import FinancialStatus from "./pages/FinancialStatus";
 import Friend from "./pages/Friend";
 import Loanpool from "./pages/LoanPool";
