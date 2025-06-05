@@ -418,3 +418,16 @@ export const getMyLoanTransactions = async (userId) => {
     throw error;
   }
 };
+
+// 유저 이름 조회
+export const getNameById = async (userId) => {
+  try {
+    const res = await api.post('/getName', { userId });
+    console.log('[✅ getNameById 응답]', res.data);
+    return res.data;
+  } catch (err) {
+    console.error('[❌ getNameById 실패]', err.response?.data || err.message);
+    throw err;
+  }
+};
+

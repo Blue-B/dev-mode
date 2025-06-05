@@ -1220,6 +1220,56 @@ app.get('/api/transaction/:txHash', async (req, res) => {
   }
 });
 
+//================= 자금현황 api ==================
+
+//거래상대 이름 가져오기
+app.post('/getName', async (req, res) => {
+  const { userId } = req.body;
+  console.log('요청 받은 userId:', userId);
+
+  if (!userId) return res.status(400).json({ error: 'userId가 필요합니다.' });
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: '이름을 찾을 수 없습니다.' });
+    }
+
+    res.json(data.name);
+  } catch (err) {
+    console.error('[getName 오류]', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+
+// 로그인한 사용자의 전체 대출 거래 기록 조회 (빌려준 것 + 빌린 것)
+app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
+  const { userId } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('wallet_transactions')
+      .select('id, type, amount, loan_id, related_user_id, created_at')
+      .or(`user_id.eq.${userId},related_user_id.eq.${userId}`)
+      .in('type', ['loan_sent', 'loan_received'])
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('대출 거래 기록 조회 실패:', err);
+    res.status(500).json({ error: '대출 기록 조회 실패' });
+  }
+});
+
+
 // 마지막에만 index.html 반환 (SPA 대응용)
 app.get('*', function (req, res) {
   res.sendFile(path.join(clientPath, 'index.html'));
@@ -1308,23 +1358,6 @@ app.post('/api/contract/save', async (req, res) => {
   }
 });
 
-// 로그인한 사용자의 전체 대출 거래 기록 조회 (빌려준 것 + 빌린 것)
-app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
-  const { userId } = req.body;
 
-  try {
-    const { data, error } = await supabase
-      .from('wallet_transactions')
-      .select('id, type, amount, loan_id, related_user_id, created_at')
-      .or(`user_id.eq.${userId},related_user_id.eq.${userId}`)
-      .in('type', ['loan_sent', 'loan_received'])
-      .order('created_at', { ascending: false });
 
-    if (error) throw error;
 
-    res.json({ success: true, data });
-  } catch (err) {
-    console.error('대출 거래 기록 조회 실패:', err);
-    res.status(500).json({ error: '대출 기록 조회 실패' });
-  }
-});

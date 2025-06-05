@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { GiftIcon, CircleStackIcon } from '@heroicons/react/24/solid';
-import { getMyLoanTransactions, getCurrentUser, getUserProfile } from '../services/api';
+import { getMyLoanTransactions, getCurrentUser, getUserProfile ,getNameById } from '../services/api';
 
 const FinancialStatus = () => {
   const [loans, setLoans] = useState([]);
@@ -15,46 +15,58 @@ const FinancialStatus = () => {
   };
 
 
- useEffect(() => {
+useEffect(() => {
   const fetchData = async () => {
     try {
       const user = await getCurrentUser();
       await getUserProfile(user.id);
 
-      const transactions = await getMyLoanTransactions(user.id); // ✅ user.id 전달
+      const transactions = await getMyLoanTransactions(user.id);
 
-      const enriched = transactions.map(tx => {
-        const isLender = tx.type === 'loan_sent';
-        const counterparty = tx.related_user_id || '알 수 없음';
-        const amountNum = Math.abs(tx.amount);
-        let status = '';
-        if (tx.type === 'repay' || tx.type === 'repay_sent') {
-          status = '상환 완료';
-        } else if (tx.type === 'loan_sent' || tx.type === 'loan_received') {
-          status = '활성';
-        } else {
-          status = '알 수 없음';
-        }
+      // 모든 이름을 병렬로 가져옴
+      const enriched = await Promise.all(
+        transactions.map(async (tx) => {
+          const isLender = tx.type === 'loan_sent';
+          const counterpartyId = tx.related_user_id || '알 수 없음';
+          const amountNum = Math.abs(tx.amount);
 
-        // 역할: 금액 기준으로 판단
-        let role = '';
-        if (tx.amount < 0) role = '대출';      // 내가 빌려준 경우
-        else if (tx.amount > 0) role = '차입'; // 내가 빌린 경우
+          let status = '';
+          if (tx.type === 'repay' || tx.type === 'repay_sent') {
+            status = '상환 완료';
+          } else if (tx.type === 'loan_sent' || tx.type === 'loan_received') {
+            status = '활성';
+          } else {
+            status = '알 수 없음';
+          }
 
-        //repay, repay_sent면 상환 상태, loan_sent, loan_received면 활성 상태
-        return {
-          amount: `${amountNum.toLocaleString()} KRW`,
-          amountNum,
-          rate: tx.rate ? `${tx.rate}%` : '5%',
-          period: tx.period || '12개월',
-          start: new Date(tx.created_at).toISOString().split('T')[0],
-          timestamp: new Date(tx.created_at).getTime(),
-          status: tx.status || '활성',
-          counterparty,
-          role,
-          isLender
-        };
-      });
+          let role = '';
+          if (tx.amount < 0) role = '대출';
+          else if (tx.amount > 0) role = '차입';
+
+          let counterpartyName = counterpartyId;
+          if (counterpartyId !== '알 수 없음') {
+            try {
+              counterpartyName = await getNameById(counterpartyId);
+            } catch (e) {
+              console.warn('이름 불러오기 실패:', counterpartyId);
+            }
+          }
+
+          return {
+            amount: `${amountNum.toLocaleString()} KRW`,
+            amountNum,
+            rate: tx.rate ? `${tx.rate}%` : '5%',
+            period: tx.period || '12개월',
+            start: new Date(tx.created_at).toISOString().split('T')[0],
+            timestamp: new Date(tx.created_at).getTime(),
+            status: tx.status || '활성',
+            counterparty: counterpartyId,
+            counterpartyName,
+            role,
+            isLender
+          };
+        })
+      );
 
       setLoans(enriched);
     } catch (err) {
@@ -64,23 +76,7 @@ const FinancialStatus = () => {
 
   fetchData();
 }, []);
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const user = await getCurrentUser();
-      const transactions = await getMyLoanTransactions(user.id);
 
-      transactions.forEach(tx => {
-        console.log('📦 거래 기록:', tx);
-      });
-
-    } catch (err) {
-      console.error('불러오기 실패:', err);
-    }
-  };
-
-  fetchData();
-}, []);
 
 
   // 필터 + 정렬 적용
@@ -177,9 +173,9 @@ useEffect(() => {
               <th className="px-4 py-2 font-normal">대출 금액</th>
               <th className="px-4 py-2 font-normal">이자율</th>
               <th className="px-4 py-2 font-normal">상환 기간</th>
-              <th className="px-4 py-2 font-normal">시작 날짜</th>
+              <th className="px-4 py-2름 font-normal">시작 날짜</th>
               <th className="px-4 py-2 font-normal">상환 상태</th>
-              <th className="px-4 py-2 font-normal">상대 지갑 주소</th>
+              <th className="px-4 py-2 font-normal">상대 이름</th>
             </tr>
           </thead>
           <tbody>
@@ -200,7 +196,7 @@ useEffect(() => {
             {loan.status}
           </span>
         </td>
-        <td className="px-4 py-3">{loan.counterparty}</td>
+        <td className="px-4 py-3">{loan.counterpartyName}</td>
       </tr>
     ))
   )}
