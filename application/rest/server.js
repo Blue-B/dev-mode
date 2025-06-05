@@ -94,6 +94,35 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// 4. 관리자 지갑 잔액 조회 엔드포인트 (/admin-balance)
+//    - sdk.send(true, 'GetWalletBalance', ['ADMIN_WALLET']) 만 호출하면 됩니다.
+////////////////////////////////////////////////////////////////////////////////
+app.get('/admin-balance', async (req, res) => {
+  try {
+    console.log('\n🏷 [admin-balance] 요청 도착');
+
+    // (1) send(true, 'GetWalletBalance', ['ADMIN_WALLET']) 호출 → 문자열 반환
+    const balanceStr = await sdk.send(true, 'GetWalletBalance', ['ADMIN_WALLET']);
+    // 예를 들어 balanceStr = "42.5" 같은 문자열
+
+    // (2) 필요하면 숫자로 변환해도 되고, 문자열 그대로 응답해도 됩니다.
+    const balance = parseFloat(balanceStr);
+
+    return res.json({
+      adminWallet: 'ADMIN_WALLET',
+      balance: balance   // 숫자로 내려주기
+      // 만약 문자열 그대로 보내려면 → balance: balanceStr
+    });
+  } catch (err) {
+    console.error('[admin-balance] 에러 발생:', err);
+    return res.status(500).json({
+      error: '관리자 지갑 잔액 조회 실패',
+      details: err.message
+    });
+  }
+});
+
 // ================= 지갑 API ==================
 
 // 지갑 생성
@@ -1220,11 +1249,6 @@ app.get('/api/transaction/:txHash', async (req, res) => {
   }
 });
 
-// 마지막에만 index.html 반환 (SPA 대응용)
-app.get('*', function (req, res) {
-  res.sendFile(path.join(clientPath, 'index.html'));
-});
-
 // 계약서 해시 생성 함수
 async function generateContractHash(contractImage) {
   return new Promise((resolve, reject) => {
@@ -1306,4 +1330,51 @@ app.post('/api/contract/save', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+////////////////////////////////////////////////////////////////////////////////
+// Supabase에서 모든 사용자별 잔액(balance) 계산
+////////////////////////////////////////////////////////////////////////////////
+// async function fetchBalancesFromSupabase() {
+//   /**
+//    * Supabase의 wallet_transactions 테이블에서
+//    * user_id 별로 SUM(amount)를 계산하여 잔액을 구함.
+//    * amount 컬럼은 입금이면 +값, 출금/대출 송금이면 –값, 대출 수령이면 +값, 상환이면 –값 등으로 INSERT.
+//    */
+//   try {
+//     // Supabase SQL RPC 호출 또는 query builder 사용
+//     // 여기서는 query builder 방식 예시:
+//     let { data, error } = await supabase
+//       .from('wallet_transactions')
+//       .select('user_id, amount')
+//       .order('user_id', { ascending: true });
+
+//     if (error) {
+//       throw error;
+//     }
+
+//     // 사용자별 합계 계산(메모리에 모두 적재 후 집계)
+//     const balanceMap = {}; // { user_id: balance }
+//     data.forEach((row) => {
+//       const uid = row.user_id;
+//       const amt = parseFloat(row.amount);
+//       if (!balanceMap[uid]) {
+//         balanceMap[uid] = 0;
+//       }
+//       balanceMap[uid] += amt;
+//     });
+
+//     // 결과 출력 (디버그용)
+//     console.log('▶ Supabase에서 계산된 잔액 Map:', balanceMap);
+
+//     return balanceMap; // { 'uuid1': 12345.67, 'uuid2': -100.00, ... }
+//   } catch (err) {
+//     console.error('Supabase 잔액 집계 에러:', err);
+//     throw err;
+//   }
+// }
+
+// 마지막에만 index.html 반환 (SPA 대응용)
+app.get('*', function (req, res) {
+  res.sendFile(path.join(clientPath, 'index.html'));
 });
