@@ -5,6 +5,7 @@ import { createLoan, getUserProfile } from '../../services/api';
 import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
 import { X, FileText, PenTool } from "lucide-react";
+import html2canvas from "html2canvas";
 
 
 
@@ -108,8 +109,29 @@ export default function LoanAgreement({
     setIsRequesting(true); // 요청 시작 시 상태 업데이트
     
     try {
+      // 1. 계약서 이미지 생성
+      const contractRef = document.querySelector('.contract-preview');
+      if (!contractRef) {
+        throw new Error('계약서 미리보기를 찾을 수 없습니다.');
+      }
 
-      const result = await createLoan(loanData);
+      const canvas = await html2canvas(contractRef, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff"
+      });
+
+      // 2. 이미지를 Blob으로 변환
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const contractImage = await blob.text();
+
+      // 3. 대출 생성 요청 (계약서 이미지 포함)
+      const result = await createLoan({
+        ...loanData,
+        contractImage
+      });
+
       console.log('📦 대출 생성 결과:', result);
         
       alert('대출 요청되었습니다.');
@@ -154,7 +176,7 @@ export default function LoanAgreement({
             
             {/* Document Preview Section */}
             <div className="px-6 pb-2">
-              <div className="relative p-4 mb-4 rounded-lg bg-gray-50">
+              <div className="relative p-4 mb-4 rounded-lg bg-gray-50 contract-preview">
                 {/* Document Icon with Blue Stamp */}
                 <div className="flex justify-center mb-4">
                   <div className="relative cursor-pointer" onClick={handleDocumentClick}>
@@ -293,7 +315,7 @@ export default function LoanAgreement({
                 <div className="pt-2 pb-4">
                   <button 
                     onClick={handleSendLoan}
-                    disabled={isRequesting} // 👈 추가
+                    disabled={isRequesting}
                     className={`w-full py-3 text-sm font-medium text-white transition-colors rounded-xl 
                       ${isRequesting ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
                   >

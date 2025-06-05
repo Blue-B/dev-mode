@@ -722,7 +722,323 @@ const LoanShim = class {
   }
 
 
-  
+  // =========================
+  // CreatePool: 풀 생성 및 자동 참여
+  // args = [id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit]
+  // =========================
+  async CreatePool(stub, args) {
+    console.log('🟡 [CreatePool] 호출됨, 전달된 인자:', args);
+
+    if (args.length !== 7) {
+      console.error(`❌ [CreatePool] 인자 수 오류: ${args.length}개 전달됨`);
+      throw new Error('Expecting 7 args: [id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit]');
+    }
+
+    const [id, name, minDepositStr, interestRateStr, durationMonthsStr, creatorAddress, initialDepositStr] = args;
+
+    const minDeposit = parseInt(minDepositStr, 10);
+    const interestRate = parseInt(interestRateStr, 10);
+    const durationMonths = parseInt(durationMonthsStr, 10);
+    const initialDeposit = parseInt(initialDepositStr, 10);
+
+    console.log(`🟡 [CreatePool] 파싱 완료 → minDeposit: ${minDeposit}, interestRate: ${interestRate}, durationMonths: ${durationMonths}, initialDeposit: ${initialDeposit}`);
+
+    if (interestRate > 5) {
+      console.error('❌ [CreatePool] 이자율 제한 초과');
+      throw new Error('Interest rate must be 5% or less');
+    }
+
+    const existing = await stub.getState(id);
+    if (existing && existing.length > 0) {
+      console.error(`❌ [CreatePool] 동일 ID의 풀 존재함: ${id}`);
+      throw new Error(`Pool ${id} already exists`);
+    }
+
+    // 지갑 확인 및 잔액 차감
+    console.log(`🔍 [CreatePool] 지갑 조회 중: ${creatorAddress}`);
+    const walletBytes = await stub.getState(creatorAddress);
+
+    if (!walletBytes || walletBytes.length === 0) {
+      console.error(`❌ [CreatePool] 지갑 존재하지 않음: ${creatorAddress}`);
+      throw new Error(`Wallet ${creatorAddress} not found`);
+    }
+
+    const wallet = JSON.parse(walletBytes.toString());
+    console.log(`✅ [CreatePool] 지갑 조회 성공: 현재 잔액 ${wallet.balance}`);
+
+    if (wallet.balance < initialDeposit) {
+      console.error(`❌ [CreatePool] 잔액 부족: 현재 잔액 ${wallet.balance}, 예치금 ${initialDeposit}`);
+      throw new Error('Insufficient balance for initial deposit');
+    }
+
+    wallet.balance -= initialDeposit;
+    await stub.putState(creatorAddress, Buffer.from(JSON.stringify(wallet)));
+    console.log(`💰 [CreatePool] 초기 예치금 차감 완료. 새로운 잔액: ${wallet.balance}`);
+
+    const now = Date.now();
+    const end = new Date();
+    end.setMonth(end.getMonth() + durationMonths);
+
+    const pool = {
+      id,
+      name,
+      minDeposit,
+      interestRate,
+      startTime: now,
+      endTime: end.getTime(),
+      status: 'Open',
+      participants: [creatorAddress],
+      deposits: { [creatorAddress]: initialDeposit },
+      joinedAt: { [creatorAddress]: Math.floor(now / 1000) },
+      totalDeposit: initialDeposit,
+      totalInterest: 0
+    };
+
+    await stub.putState(id, Buffer.from(JSON.stringify(pool)));
+    console.log(`✅ [CreatePool] 풀 생성 완료: ${id}`);
+  }
+
+  // =========================
+  // QueryPool: 단일 풀 조회
+  // args = [id]
+  // =========================
+  async QueryPool(stub, args) {
+    if (args.length !== 1) throw new Error('Expecting 1 arg: [id]');
+    const id = args[0];
+    const bytes = await stub.getState(id);
+    if (!bytes || bytes.length === 0) throw new Error(`Pool ${id} not found`);
+    return bytes;
+  }
+
+  // =========================
+  // QueryAllPools: 모든 풀 조회
+  // args = []
+  // =========================
+  async QueryAllPools(stub, args) {
+    const iterator = await stub.getStateByRange('', '');
+    const results = [];
+    while (true) {
+      const res = await iterator.next();
+      if (res.value && res.value.value.toString()) {
+        try {
+          const obj = JSON.parse(res.value.value.toString());
+          if (obj.id && obj.minDeposit !== undefined) results.push(obj);
+        } catch (_) {}
+      }
+      if (res.done) break;
+    }
+    await iterator.close();
+    return Buffer.from(JSON.stringify(results));
+  }
+
+  // =========================
+  // JoinPool: 사용자가 Pool에 예치 참여
+  // args = [poolID, userAddress, depositAmount]
+  // =========================
+  async JoinPool(stub, args) {
+    if (args.length !== 3) throw new Error('Expecting 3 args: [poolID, userAddress, depositAmount]');
+    const [poolID, userAddress, depositStr] = args;
+    const depositAmount = parseInt(depositStr, 10);
+
+    const poolBytes = await stub.getState(poolID);
+    if (!poolBytes || poolBytes.length === 0) throw new Error(`Pool ${poolID} not found`);
+    const pool = JSON.parse(poolBytes.toString());
+
+    if (pool.deposits[userAddress]) throw new Error('User already joined the pool');
+
+    const walletBytes = await stub.getState(userAddress);
+    if (!walletBytes || walletBytes.length === 0) throw new Error(`Wallet ${userAddress} not found`);
+    const wallet = JSON.parse(walletBytes.toString());
+
+    if (wallet.balance < depositAmount) throw new Error('Insufficient balance');
+    wallet.balance -= depositAmount;
+
+    await stub.putState(userAddress, Buffer.from(JSON.stringify(wallet)));
+
+    const now = Math.floor(Date.now() / 1000);
+
+    if (!pool.deposits) pool.deposits = {};
+    if (!pool.joinedAt) pool.joinedAt = {};
+
+    pool.participants.push(userAddress);
+    pool.deposits[userAddress] = depositAmount;
+    pool.joinedAt[userAddress] = now;
+    pool.totalDeposit += depositAmount;
+
+    await stub.putState(poolID, Buffer.from(JSON.stringify(pool)));
+  }
+
+  // =========================
+  // QueryPoolsByUser: 사용자가 참여한 모든 풀 조회
+  // args = [userAddress]
+  // =========================
+  async QueryPoolsByUser(stub, args) {
+    if (args.length !== 1) throw new Error('Expecting 1 arg: [userAddress]');
+    const userAddress = args[0];
+
+    const iterator = await stub.getStateByRange('', '');
+    const userPools = [];
+
+    while (true) {
+      const res = await iterator.next();
+      if (res.value && res.value.value.toString()) {
+        try {
+          const pool = JSON.parse(res.value.value.toString());
+          if (Array.isArray(pool.participants) && pool.participants.includes(userAddress)) {
+            userPools.push(pool);
+          }
+        } catch (_) {}
+      }
+      if (res.done) break;
+    }
+    await iterator.close();
+    return Buffer.from(JSON.stringify(userPools));
+  }
+
+  // =========================
+  // CreateLoanRequestFromPool: 풀 자금으로 대출 요청 생성
+  // args = [id, poolID, borrower, amount, durationDays]
+  // =========================
+  async CreateLoanRequestFromPool(stub, args) {
+    if (args.length !== 5) {
+      throw new Error('Incorrect number of arguments. Expecting 5: [id, poolID, borrower, amount, durationDays]');
+    }
+    const id = args[0];
+    const poolID = args[1];
+    const borrower = args[2];
+    const amount = parseInt(args[3], 10);
+    const durationDays = parseInt(args[4], 10);
+
+    if (isNaN(amount) || isNaN(durationDays)) {
+      throw new Error('amount and durationDays must be integers');
+    }
+
+    // 풀 확인
+    let poolBytes = await stub.getState(poolID);
+    if (!poolBytes || poolBytes.length === 0) {
+      throw new Error(`pool ${poolID} does not exist`);
+    }
+    let pool = JSON.parse(poolBytes.toString());
+
+    if (pool.status !== 'Closed') {
+      throw new Error(`pool ${poolID} is not ready for lending (status: ${pool.status})`);
+    }
+    if (pool.totalDeposit < amount) {
+      throw new Error(`not enough funds in pool ${poolID}`);
+    }
+
+    // 중복 ID 확인
+    let existingLoanBytes = await stub.getState(id);
+    if (existingLoanBytes && existingLoanBytes.length > 0) {
+      throw new Error(`loan request ${id} already exists`);
+    }
+
+    // LoanRequest 구조체 생성 (풀 기반)
+    const loan = {
+      id: id,
+      poolId: poolID,
+      lender: poolID,     // lender를 poolID로 처리
+      borrower: borrower,
+      amount: amount,
+      durationDays: durationDays,
+      interestRate: pool.interestRate,
+      status: 'Pending',
+      startTime: 0,
+      endTime: 0
+    };
+
+    await stub.putState(id, Buffer.from(JSON.stringify(loan)));
+    return;
+  }
+
+  // =========================
+  // RepayLoanToPool: 풀 기반 대출 상환 및 이자 누적
+  // args = [id]
+  // =========================
+  async RepayLoanToPool(stub, args) {
+    if (args.length !== 1) {
+      throw new Error('Incorrect number of arguments. Expecting 1: [id]');
+    }
+    const id = args[0];
+
+    // 대출 요청 조회
+    let loanBytes = await stub.getState(id);
+    if (!loanBytes || loanBytes.length === 0) {
+      throw new Error(`loan request ${id} does not exist`);
+    }
+    let loan = JSON.parse(loanBytes.toString());
+
+    if (loan.status !== 'Active') {
+      throw new Error(`loan ${id} is not active`);
+    }
+
+    // 이자 계산
+    const interest = Math.floor((loan.amount * loan.interestRate * loan.durationDays) / (365 * 100));
+    const totalAmount = loan.amount + interest;
+
+    // borrower 지갑 조회 및 잔액 확인
+    let borrowerWalletBytes = await stub.getState(loan.borrower);
+    if (!borrowerWalletBytes || borrowerWalletBytes.length === 0) {
+      throw new Error(`borrower wallet ${loan.borrower} does not exist`);
+    }
+    let borrowerWallet = JSON.parse(borrowerWalletBytes.toString());
+    if (borrowerWallet.balance < totalAmount) {
+      throw new Error(`insufficient balance for repayment`);
+    }
+    borrowerWallet.balance -= totalAmount;
+
+    // 풀 조회 및 이자 누적
+    let poolBytes = await stub.getState(loan.poolId);
+    if (!poolBytes || poolBytes.length === 0) {
+      throw new Error(`pool ${loan.poolId} does not exist`);
+    }
+    let pool = JSON.parse(poolBytes.toString());
+    pool.totalDeposit += loan.amount;
+    pool.totalInterest += interest;
+
+    // 대출 상태 업데이트
+    loan.status = 'Repaid';
+
+    // 변경된 차입자 지갑, 풀, 대출 요청 모두 저장
+    await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
+    await stub.putState(loan.poolId, Buffer.from(JSON.stringify(pool)));
+    await stub.putState(id, Buffer.from(JSON.stringify(loan)));
+    return;
+  }
+
+  // =========================
+  // QueryMyLoans: 특정 유저의 대출 요청 조회 (lender 또는 borrower 기준)
+  // args = [userAddress]
+  // 리턴: 해당 유저가 lender 또는 borrower인 LoanRequest들의 JSON 배열 Buffer
+  // =========================
+  async QueryMyLoans(stub, args) {
+    if (args.length !== 1) {
+      throw new Error('Incorrect number of arguments. Expecting 1: [userAddress]');
+    }
+    const userAddress = args[0];
+
+    const iterator = await stub.getStateByRange('', '');
+    let userLoans = [];
+    while (true) {
+      const res = await iterator.next();
+      if (res.value && res.value.value.toString()) {
+        try {
+          const obj = JSON.parse(res.value.value.toString('utf8'));
+          // lender 또는 borrower 필드가 userAddress인 경우만 포함
+          if ((obj.lender === userAddress) || (obj.borrower === userAddress)) {
+            userLoans.push(obj);
+          }
+        } catch (err) {
+          // JSON 파싱 실패 시 무시
+        }
+      }
+      if (res.done) {
+        await iterator.close();
+        break;
+      }
+    }
+    return Buffer.from(JSON.stringify(userLoans));
+  }
 
 
   // =========================
