@@ -148,7 +148,7 @@ app.post('/wallet/create', async (req, res) => {
     });
     console.log('[wallet/create] 3) 체인코드 응답 →', chainResponse.data);
 
-    // 체인코드에서 “Success” 이외의 응답이 오면 에러 처리
+    // 체인코드에서 "Success" 이외의 응답이 오면 에러 처리
     if (!chainResponse.data) {
       // data 필드가 없거나 빈 값일 경우만 실패 처리
       return res.status(500).json({ error: '블록체인 지갑 생성 실패' });
@@ -158,7 +158,7 @@ app.post('/wallet/create', async (req, res) => {
     return res.status(500).json({ error: '체인코드 호출 실패', detail: err.message });
   }
 
-  // 4. Supabase wallet_transactions 테이블에 “초기 입금 트랜잭션” 기록
+  // 4. Supabase wallet_transactions 테이블에 "초기 입금 트랜잭션" 기록
   const txObj = {
     user_id: userId,
     type: 'deposit',                        // 거래 유형
@@ -303,7 +303,7 @@ app.get('/approveLoan', async (req, res) => {
     });
 
     // ───────────────────────────────────────────────────────────────────────────
-    // 3) “지갑 주소 → profiles.id(UUID)” 매핑
+    // 3) "지갑 주소 → profiles.id(UUID)" 매핑
     //    profiles 테이블에서 wallet_id 칼럼이 실제 지갑 주소(예: 'wallet_07187a3f_...')로 저장되어 있다고 가정
     // ───────────────────────────────────────────────────────────────────────────
     // 3-1) lender 프로필 조회
@@ -343,10 +343,10 @@ app.get('/approveLoan', async (req, res) => {
     console.log('[ /approveLoan ] 3-2) borrowerUserId (UUID) →', borrowerUserId);
 
     // ───────────────────────────────────────────────────────────────────────────
-    // 4) wallet_transactions 테이블에 “loan_sent”(대출자 출금) & “loan_received”(차입자 입금) 기록
+    // 4) wallet_transactions 테이블에 "loan_sent"(대출자 출금) & "loan_received"(차입자 입금) 기록
     // ───────────────────────────────────────────────────────────────────────────
     const txOut = {
-      user_id: lenderUserId,         // 이제 “프로필 UUID”를 넣어야 함
+      user_id: lenderUserId,         // 이제 "프로필 UUID"를 넣어야 함
       type: 'loan_sent',
       amount: -Math.abs(amount),     // 출금 금액은 음수
       related_user_id: borrowerUserId,
@@ -522,46 +522,209 @@ app.get('/myLoans', async (req, res) => {
   }
 });
 
-//= ================= 대출풀 시스템 API ==================
+// ================= 대출풀 시스템 API ==================
+
 // 대출풀 생성
-// server.js - createPool
 app.post('/createPool', async (req, res) => {
-  const { id, name, minDeposit, interestRate, durationMonths } = req.body;
-  const args = [id, name, minDeposit.toString(), interestRate.toString(), durationMonths.toString()];
-
-  console.log("📥 풀 생성 요청 받음:", req.body);
-  console.log("📤 체인코드 호출 시작");
-
   try {
-    const result = await sdk.send(false, 'CreatePool', args);  // ✅ res 넘기지 않음
-    console.log("✅ 체인코드 호출 결과:", result);
+    const { id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit } = req.body;
+    console.log('📥 풀 생성 요청:', req.body);
 
-    const now = new Date();
-    const end = new Date();
-    end.setMonth(end.getMonth() + parseInt(durationMonths));
-
-    const { error } = await supabase.from('pools').insert({
-      id,
-      name,
-      min_deposit: minDeposit,
-      interest_rate: interestRate,
-      start_time: now.toISOString(),
-      end_time: end.toISOString(),
-      status: 'Open',
-      total_deposit: 0,
-      total_interest: 0,
-    });
-
-    if (error) {
-      console.error('❌ Supabase 저장 오류:', error);
-      return res.status(500).json({ error: 'Supabase 저장 실패', detail: error.message });
+    // 필수 필드 검증
+    if (!id || !name || !minDeposit || !interestRate || !durationMonths || !creatorAddress || !initialDeposit) {
+      console.error('필수 필드 누락:', { id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit });
+      return res.status(400).json({ error: '모든 필수 필드를 입력해주세요.' });
     }
 
-    return res.status(200).json({ message: '풀 생성 완료', poolId: id });
+    // 모든 숫자 필드를 문자열로 변환
+    const args = [
+      id,
+      name,
+      minDeposit.toString(),
+      interestRate.toString(),
+      durationMonths.toString(),
+      creatorAddress,
+      initialDeposit.toString()
+    ];
+
+    console.log('🔗 체인코드 호출 → CreatePool()');
+    console.log('📝 CreatePool 인자:', args);
+
+    // 1. 체인코드 호출
+    try {
+      const result = await sdk.send(false, 'CreatePool', args);
+      console.log('🎉 CreatePool 성공 → 응답:', result.toString());
+    } catch (chainError) {
+      console.error('❌ 체인코드 호출 실패:', chainError);
+      return res.status(500).json({ error: '체인코드 호출 실패: ' + chainError.message });
+    }
+
+    // 2. Supabase에 풀 정보 저장
+    const startTime = new Date();
+    const endTime = new Date(startTime);
+    endTime.setMonth(endTime.getMonth() + parseInt(durationMonths));
+
+    // 기본 필드만 포함
+    const poolData = {
+      id,
+      name,
+      min_deposit: parseInt(minDeposit),
+      interest_rate: parseInt(interestRate),
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      status: 'open',
+      total_deposit: parseInt(initialDeposit)
+    };
+
+    console.log('📝 Supabase에 저장할 풀 데이터:', poolData);
+
+    try {
+      const { data: insertedPool, error: poolError } = await supabase
+        .from('pools')
+        .insert(poolData)
+        .select()
+        .single();
+
+      if (poolError) {
+        console.error('❌ Supabase 풀 저장 실패:', poolError);
+        throw new Error('풀 정보 저장 실패: ' + poolError.message);
+      }
+
+      console.log('✅ Supabase 풀 저장 성공:', insertedPool);
+    } catch (dbError) {
+      console.error('❌ Supabase 저장 중 에러:', dbError);
+      return res.status(500).json({ error: '데이터베이스 저장 실패: ' + dbError.message });
+    }
+
+    console.log('✅ 풀 생성 완료');
+    res.json({ message: '풀 생성 완료', poolId: id });
 
   } catch (err) {
-    console.error('❌ 풀 생성 중 서버 오류:', err);
-    return res.status(500).json({ error: '풀 생성 실패', detail: err.message || '서버 오류 발생' });
+    console.error('❌ 풀 생성 실패:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 사용자의 풀 조회
+app.get('/QueryPoolsByUser', async (req, res) => {
+  const { wallet } = req.query;
+  if (!wallet) {
+    console.log('지갑 주소 누락');
+    return res.status(400).json({ error: '지갑 주소가 필요합니다.' });
+  }
+
+  try {
+    console.log('🔗 체인코드 호출 → QueryPoolsByUser(', wallet, ')');
+    const result = await sdk.send(true, 'QueryPoolsByUser', [wallet]);
+    console.log('🎉 QueryPoolsByUser 성공 → 원본 응답:', result);
+    console.log('원본 응답 타입:', typeof result);
+    console.log('원본 응답 문자열:', result?.toString());
+    
+    // 체인코드 응답이 없는 경우
+    if (!result) {
+      console.log('체인코드 응답 없음');
+      return res.json([]);
+    }
+
+    // 체인코드 응답 파싱
+    let pools = [];
+    try {
+      // 응답이 Buffer인 경우 문자열로 변환
+      const responseStr = result.toString();
+      console.log('응답 문자열:', responseStr);
+
+      // 빈 문자열이나 null 체크
+      if (!responseStr || responseStr.trim() === '') {
+        console.log('빈 응답 반환');
+        return res.json([]);
+      }
+
+      // JSON 파싱 시도
+      try {
+        // 응답이 이미 객체인 경우
+        if (typeof result === 'object' && result !== null) {
+          console.log('응답이 이미 객체임');
+          pools = result;
+        } else {
+          // 문자열인 경우 JSON 파싱
+          console.log('문자열을 JSON으로 파싱 시도');
+          pools = JSON.parse(responseStr);
+        }
+      } catch (parseError) {
+        console.error('JSON 파싱 실패:', parseError);
+        console.error('파싱 시도한 문자열:', responseStr);
+        // 파싱 실패 시 빈 배열 반환
+        return res.json([]);
+      }
+      
+      // 응답이 배열이 아닌 경우 배열로 변환
+      if (!Array.isArray(pools)) {
+        console.log('단일 풀 객체를 배열로 변환');
+        pools = [pools];
+      }
+      
+      console.log('파싱된 풀 데이터:', pools);
+      
+      // participants와 deposits 필드 보정
+      pools = pools.map(pool => {
+        if (!pool) {
+          console.log('null 풀 데이터 발견');
+          return null;
+        }
+
+        console.log('처리할 풀 데이터:', pool);
+
+        // 문자열로 된 participants와 deposits를 파싱
+        let participants = [];
+        let deposits = {};
+        let joinedAt = {};
+
+        try {
+          if (typeof pool.participants === 'string') {
+            participants = JSON.parse(pool.participants);
+          } else if (Array.isArray(pool.participants)) {
+            participants = pool.participants;
+          }
+
+          if (typeof pool.deposits === 'string') {
+            deposits = JSON.parse(pool.deposits);
+          } else if (typeof pool.deposits === 'object' && pool.deposits !== null) {
+            deposits = pool.deposits;
+          }
+
+          if (typeof pool.joinedAt === 'string') {
+            joinedAt = JSON.parse(pool.joinedAt);
+          } else if (typeof pool.joinedAt === 'object' && pool.joinedAt !== null) {
+            joinedAt = pool.joinedAt;
+          }
+        } catch (parseError) {
+          console.error('풀 데이터 필드 파싱 실패:', parseError);
+        }
+
+        const processedPool = {
+          ...pool,
+          id: pool.id || pool.ID, // ID 필드 통일
+          participants: Array.isArray(participants) ? participants : [],
+          deposits: typeof deposits === 'object' && deposits !== null ? deposits : {},
+          joinedAt: typeof joinedAt === 'object' && joinedAt !== null ? joinedAt : {},
+          status: pool.status || 'Open',
+          creator_address: pool.creator_address || pool.creatorAddress || wallet // 생성자 주소 추가
+        };
+        console.log('처리된 풀:', processedPool);
+        return processedPool;
+      }).filter(Boolean); // null 값 제거
+
+    } catch (parseError) {
+      console.error('풀 데이터 처리 실패:', parseError);
+      console.error('원본 응답:', result.toString());
+      return res.status(500).json({ error: '풀 데이터 처리 실패' });
+    }
+    
+    console.log('최종 반환할 풀 목록:', pools);
+    return res.json(pools);
+  } catch (err) {
+    console.error('사용자 풀 조회 실패:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -600,6 +763,7 @@ app.post('/joinPool', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // ================= 정적 파일 서비스 및 React 라우팅 ==================
@@ -882,7 +1046,7 @@ app.get('/api/friends', authenticateUser, async (req, res) => {
       return res.status(500).json({ error: '친구 조회 실패(2)' });
     }
 
-    // 3) 위 두 배열을 합쳐서, 중복 없이 “친구의 프로필 ID”만 모은다
+    // 3) 위 두 배열을 합쳐서, 중복 없이 "친구의 프로필 ID"만 모은다
     const partnerIds = [
       ...sentRows.map(r => r.friend_user_id),
       ...receivedRows.map(r => r.user_id)
