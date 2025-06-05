@@ -931,11 +931,20 @@ app.post('/check-email', async (req, res) => {
   try {
     const { email } = req.body;
     
+    // 이메일 도메인 대소문자 구분 없이 처리
+    const [localPart, domain] = email.split('@');
+    const normalizedEmail = `${localPart}@${domain.toLowerCase()}`;
+    
     // Supabase에서 사용자 확인
     const { data: { users }, error } = await supabase.auth.admin.listUsers();
     if (error) throw error;
     
-    const user = users.find(u => u.email === email);
+    // 이메일 비교 시 도메인 부분을 소문자로 변환하여 비교
+    const user = users.find(u => {
+      const [userLocalPart, userDomain] = u.email.split('@');
+      return userLocalPart === localPart && userDomain.toLowerCase() === domain.toLowerCase();
+    });
+
     if (!user) {
       return res.json({ exists: false });
     }
