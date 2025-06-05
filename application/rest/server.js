@@ -94,6 +94,35 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// 4. 관리자 지갑 잔액 조회 엔드포인트 (/admin-balance)
+//    - sdk.send(true, 'GetWalletBalance', ['ADMIN_WALLET']) 만 호출하면 됩니다.
+////////////////////////////////////////////////////////////////////////////////
+app.get('/admin-balance', async (req, res) => {
+  try {
+    console.log('\n🏷 [admin-balance] 요청 도착');
+
+    // (1) send(true, 'GetWalletBalance', ['ADMIN_WALLET']) 호출 → 문자열 반환
+    const balanceStr = await sdk.send(true, 'GetWalletBalance', ['ADMIN_WALLET']);
+    // 예를 들어 balanceStr = "42.5" 같은 문자열
+
+    // (2) 필요하면 숫자로 변환해도 되고, 문자열 그대로 응답해도 됩니다.
+    const balance = parseFloat(balanceStr);
+
+    return res.json({
+      adminWallet: 'ADMIN_WALLET',
+      balance: balance   // 숫자로 내려주기
+      // 만약 문자열 그대로 보내려면 → balance: balanceStr
+    });
+  } catch (err) {
+    console.error('[admin-balance] 에러 발생:', err);
+    return res.status(500).json({
+      error: '관리자 지갑 잔액 조회 실패',
+      details: err.message
+    });
+  }
+});
+
 // ================= 지갑 API ==================
 
 // 지갑 생성
@@ -1358,6 +1387,7 @@ app.post('/api/contract/save', async (req, res) => {
   }
 });
 
-
-
-
+// 마지막에만 index.html 반환 (SPA 대응용)
+app.get('*', function (req, res) {
+  res.sendFile(path.join(clientPath, 'index.html'));
+});
