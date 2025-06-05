@@ -1307,3 +1307,24 @@ app.post('/api/contract/save', async (req, res) => {
     });
   }
 });
+
+// 로그인한 사용자의 전체 대출 거래 기록 조회 (빌려준 것 + 빌린 것)
+app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
+  const { userId } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('wallet_transactions')
+      .select('id, type, amount, loan_id, related_user_id, created_at')
+      .or(`user_id.eq.${userId},related_user_id.eq.${userId}`)
+      .in('type', ['loan_sent', 'loan_received'])
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('대출 거래 기록 조회 실패:', err);
+    res.status(500).json({ error: '대출 기록 조회 실패' });
+  }
+});
