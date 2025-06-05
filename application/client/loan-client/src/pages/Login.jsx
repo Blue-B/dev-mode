@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -10,6 +11,40 @@ const Login = () => {
     password: "",
   });
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({
+    type: 'success',
+    title: '',
+    message: ''
+  });
+  const [timerProgress, setTimerProgress] = useState(100);
+
+  const showNotification = (type, title, message) => {
+    setModalContent({ type, title, message });
+    setShowModal(true);
+    setTimerProgress(100);
+
+    const duration = 3000; // 3초
+    const interval = 30; // 30ms마다 업데이트
+    const steps = duration / interval;
+    const decrement = 100 / steps;
+
+    const timer = setInterval(() => {
+      setTimerProgress(prev => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          setShowModal(false);
+          return 0;
+        }
+        return prev - decrement;
+      });
+    }, interval);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setTimerProgress(0);
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -27,13 +62,18 @@ const Login = () => {
       if (error) throw error;
       navigate("/");
     } catch (error) {
-      alert("로그인 실패: " + error.message);
+      let errorMessage = '로그인 중 오류가 발생했습니다.';
+      if (error.message === 'Invalid login credentials') {
+        errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = '이메일 인증이 필요합니다. 이메일을 확인해주세요.';
+      }
+      showNotification('error', '로그인 실패', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // 이메일/비밀번호 로그인 핸들러
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
@@ -41,11 +81,21 @@ const Login = () => {
       if (error) throw error;
       // 구글 로그인 성공 후 리다이렉트는 AuthContext에서 자동으로 처리됨
     } catch (error) {
-      alert("구글 로그인 실패: " + error.message);
+      let errorMessage = '구글 로그인 중 오류가 발생했습니다.';
+      if (error.message.includes('popup_closed_by_user')) {
+        errorMessage = '로그인 창이 닫혔습니다. 다시 시도해주세요.';
+      } else if (error.message.includes('cancelled')) {
+        errorMessage = '로그인이 취소되었습니다.';
+      }
+      showNotification('error', '구글 로그인 실패', errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  const bgColor = modalContent.type === 'success' ? 'bg-green-50' : 'bg-red-50';
+  const textColor = modalContent.type === 'success' ? 'text-green-800' : 'text-red-800';
+  const Icon = modalContent.type === 'success' ? CheckCircleIcon : ExclamationCircleIcon;
 
   return (
     <div className="bg-white min-h-screen flex flex-col items-center justify-center px-6">
@@ -109,6 +159,50 @@ const Login = () => {
           <NavLink to="/signup" className="text-blue-500 hover:underline">회원가입하기</NavLink>
         </p>
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className={`${bgColor} px-4 pt-5 pb-4 sm:p-6 sm:pb-4`}>
+                <div className="sm:flex sm:items-start">
+                  <div className={`mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10 ${modalContent.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+                    <Icon className={`h-6 w-6 ${modalContent.type === 'success' ? 'text-green-600' : 'text-red-600'}`} aria-hidden="true" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className={`text-lg font-medium leading-6 ${textColor}`}>{modalContent.title}</h3>
+                    <div className="mt-2">
+                      <p className={`text-sm ${textColor}`}>{modalContent.message}</p>
+                    </div>
+                  </div>
+                  <div className="absolute top-0 right-0 pt-4 pr-4">
+                    <button
+                      type="button"
+                      className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      onClick={closeModal}
+                    >
+                      <span className="sr-only">Close</span>
+                      <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="relative">
+                <div className="h-1 bg-gray-200">
+                  <div
+                    className={`h-1 ${modalContent.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}
+                    style={{ width: `${timerProgress}%`, transition: 'width 30ms linear' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
