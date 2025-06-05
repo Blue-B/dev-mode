@@ -6,8 +6,9 @@ import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
 import { X, FileText, PenTool } from "lucide-react";
 import html2canvas from "html2canvas";
+import { createClient } from '@supabase/supabase-js';
 
-
+const supabase = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.REACT_APP_SUPABASE_ANON_KEY);
 
 export default function LoanAgreement({
   loanData,
@@ -46,6 +47,28 @@ export default function LoanAgreement({
       }
     })();
   }, [user]);
+  
+  useEffect(() => {
+    // 대출자(갑), 채무자(을) user_id로 서명 불러오기
+    const fetchSignatures = async () => {
+      if (!selectedFriend?.id || !user?.id) return;
+      const { data: lenderSig } = await supabase
+        .from('signatures')
+        .select('signature_data')
+        .eq('user_id', selectedFriend.id)
+        .single();
+      const { data: borrowerSig } = await supabase
+        .from('signatures')
+        .select('signature_data')
+        .eq('user_id', user.id)
+        .single();
+      setSignatures({
+        lender: lenderSig?.signature_data ? `data:image/svg+xml;base64,${lenderSig.signature_data}` : null,
+        borrower: borrowerSig?.signature_data ? `data:image/svg+xml;base64,${borrowerSig.signature_data}` : null
+      });
+    };
+    fetchSignatures();
+  }, [selectedFriend?.id, user?.id]);
   
   const contractData = {
     amount: loanData?.amount || "0",

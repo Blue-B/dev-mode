@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createWallet, getWalletBalance } from '../services/api';
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import SignaturePad from 'react-signature-canvas';
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
@@ -53,6 +54,8 @@ const Signup = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const signaturePadRef = useRef(null);
+  const [signatureData, setSignatureData] = useState(null);
 
   // 구글 로그인으로부터 전달받은 정보 처리
   useEffect(() => {
@@ -237,9 +240,23 @@ const Signup = () => {
     return `${year.slice(2)}${month}${day}`;
   };
 
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+  const handleSaveSignature = () => {
+    if (signaturePadRef.current && !signaturePadRef.current.isEmpty()) {
+      const svgData = signaturePadRef.current.toDataURL('image/svg+xml');
+      setSignatureData(svgData);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
     setLoading(true);
+
+    // 1. 서명 유효성 검사
+    if (!signatureData) {
+      alert('서명을 입력해주세요.');
+      setLoading(false);
+      return;
+    }
 
     let userId;
 
@@ -322,6 +339,14 @@ const Signup = () => {
         console.error("지갑 자동 생성 실패:", walletError.message || walletError);
       }
 
+      // 2. 서명 SVG 추출
+      const svgBase64 = signatureData.replace('data:image/svg+xml;base64,', '');
+      // 3. Supabase signatures 테이블에 저장
+      await supabase.from('signatures').insert({
+        user_id: userId,
+        signature_data: svgBase64
+      });
+
       navigate('/');
 
     } catch (error) {
@@ -339,7 +364,6 @@ const Signup = () => {
       setLoading(false);
     }
   };
-
 
   const validateForm = () => {
     const newErrors = {};
@@ -707,6 +731,41 @@ const Signup = () => {
             exit="exit"
             className="text-center"
           >
+            <h2 className="text-2xl font-bold mb-6">서명을 입력해주세요</h2>
+            <div className="mt-8">
+              <label className="block text-sm font-medium text-gray-700 mb-2">서명</label>
+              <SignaturePad ref={signaturePadRef} canvasProps={{ className: 'signature-canvas w-full h-32 border' }} />
+              <button type="button" onClick={() => signaturePadRef.current.clear()} className="mt-2 px-4 py-2 bg-gray-200 rounded">지우기</button>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-8 space-y-4"
+            >
+              <button
+                onClick={() => {
+                  handleSaveSignature();
+                  handleNext();
+                }}
+                className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
+              >
+                다음
+              </button>
+            </motion.div>
+          </motion.div>
+        );
+
+      case 6:
+        return (
+          <motion.div
+            key="step6"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="text-center"
+          >
             <h2 className="text-2xl font-bold mb-6">입력하신 정보를 확인해주세요</h2>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -739,6 +798,16 @@ const Signup = () => {
                 <span className="font-medium">{formData.address}</span>
               </div>
             </motion.div>
+            <div className="mt-8">
+              <label className="block text-sm font-medium text-gray-700 mb-2">서명 미리보기</label>
+              <div className="border rounded bg-white flex items-center justify-center h-32">
+                {signatureData ? (
+                  <img src={signatureData} alt="서명 미리보기" className="h-24" />
+                ) : (
+                  <span className="text-gray-400">(서명 없음)</span>
+                )}
+              </div>
+            </div>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -754,7 +823,7 @@ const Signup = () => {
                   수정하기
                 </button>
                 <button
-                  onClick={handleSubmit}
+                  onClick={handleSignup}
                   className="bg-blue-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200"
                   disabled={loading}
                 >
