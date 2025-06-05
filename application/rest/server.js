@@ -224,6 +224,7 @@ app.get('/getWalletBalance', async function (req, res) {
 });
 
 // ================= 대출 시스템 API ==================
+
 // 한국 시간으로 변환하는 함수
 function getKoreanTime() {
   const now = new Date();
@@ -232,8 +233,8 @@ function getKoreanTime() {
 }
 
 // 대출 요청 생성
-app.get('/createLoan', async function (req, res) {
-  const { id, lender, borrower, amount, durationDays, interestRate } = req.query;
+app.post('/createLoan', async function (req, res) {
+  const { id, lender, borrower, amount, durationDays, interestRate, contractImage } = req.body;
   const args = [id, lender, borrower, amount, durationDays, interestRate];
 
   try {
@@ -293,6 +294,7 @@ app.get('/approveLoan', async (req, res) => {
     //   endTime: 1779805385,
     //   poolId: ''
     // }
+
     const { lender: lenderWalletAddr, borrower: borrowerWalletAddr, amount } = loanInfo;
     console.log('[ /approveLoan ] 2) 파싱된 lender/borrower/amount →', {
       lenderWalletAddr,
@@ -405,26 +407,95 @@ app.get('/denyLoan', async (req, res) => {
   }
 });
 
-// 대출 상환
-app.get('/repayLoan', function (req, res) {
-    let { id } = req.query;
-    let args = [id];
-    sdk.send(false, 'RepayLoan', args, res);
-});
+async function queryLoan(id) {
+  const result = await sdk.send(true, 'QueryLoanRequest', [id]);
+  return typeof result === 'string' ? JSON.parse(result) : result;
+}
 
-// 단일 대출 요청 조회
-app.get('/queryLoan', async function (req, res) {
-  const { id } = req.query;
-  if (!id) return res.status(400).json({ error: 'Loan ID가 필요합니다.' });
+// 대출 상환
+// app.get('/repayLoan', function (req, res) {
+//     let { id } = req.query;
+//     let args = [id];
+//     sdk.send(false, 'RepayLoan', args, res);
+// });
+app.post('/loan/repay', async (req, res) => {
+  const { loanId } = req.body;
+  console.log('[RepayLoan] 상환 요청 도착 → loanId:', loanId);
 
   try {
-    const result = await sdk.send(true, 'QueryLoanRequest', [id]);
-    return res.json(result);
+    // 체인코드 트랜잭션 실행
+    const result = await sdk.send(false, 'RepayLoan', [loanId], res);
+    console.log('[RepayLoan] 체인 응답:', result);
+
+    // 체인에서 loan 정보 조회
+    const loan = await queryLoan(loanId);
+    const parsed = typeof loan === 'string' ? JSON.parse(loan) : loan;
+
+
+    if (parsed.status === 'Repaid') {
+      return res.json({ success: true, message: '이미 상환된 대출입니다.' });
+    }
+    
+    // 이자 계산
+    const amount = Number(parsed.amount);
+    const rate = Number(parsed.interestRate);
+    const days = Number(parsed.durationDays);
+    const interest = Math.floor((amount * rate * days) / (365 * 100));
+    const totalAmount = amount + interest;
+
+    
+    console.log(`🟢 [RepayLoan] ${parsed.borrower} → ${parsed.lender}에게 ${totalAmount} 상환 처리`);
+
+    // Supabase에 상환 기록 저장
+    const { error: insertError } = await supabase.from('wallet_transactions').insert([
+      {
+        user_id: parsed.borrower,
+        type: 'repay',
+        amount: -totalAmount,
+        related_user_id: parsed.lender,
+        loan_id: parsed.id,
+        memo: '친구 대출 상환 - 출금',
+      },
+      {
+        user_id: parsed.lender,
+        type: 'repay_received',
+        amount: totalAmount,
+        related_user_id: parsed.borrower,
+        loan_id: parsed.id,
+        memo: '친구 대출 상환 - 입금',
+      },
+    ]);
+
+    if (insertError) {
+      console.error('📛 Supabase 상환 기록 실패:', insertError);
+      return res.status(500).json({ error: '상환은 완료되었으나 거래 기록 저장 실패' });
+    }
+
+    res.json({ success: true, result: result.toString() });
+
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('[RepayLoan] 체인코드 실행 오류:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
+// 단일 대출 요청 조회
+// app.get('/queryLoan', function (req, res) {
+//     let { id } = req.query;
+//     let args = [id];
+//     sdk.send(true, 'QueryLoanRequest', args, res);
+// });
+// app.get('/queryLoan', async function (req, res) {
+//   const { id } = req.query;
+//   if (!id) return res.status(400).json({ error: 'Loan ID가 필요합니다.' });
+
+//   try {
+//     const result = await sdk.send(true, 'QueryLoanRequest', [id]);
+//     return res.json(result);
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message });
+//   }
+// });
 
 // 전체 대출 요청 조회
 app.get('/queryAllLoans', async (req, res) => {
@@ -453,82 +524,44 @@ app.get('/myLoans', async (req, res) => {
 
 //= ================= 대출풀 시스템 API ==================
 // 대출풀 생성
+// server.js - createPool
 app.post('/createPool', async (req, res) => {
+  const { id, name, minDeposit, interestRate, durationMonths } = req.body;
+  const args = [id, name, minDeposit.toString(), interestRate.toString(), durationMonths.toString()];
+
+  console.log("📥 풀 생성 요청 받음:", req.body);
+  console.log("📤 체인코드 호출 시작");
+
   try {
-    const { id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit } = req.body;
-    console.log('📥 풀 생성 요청:', req.body);
+    const result = await sdk.send(false, 'CreatePool', args);  // ✅ res 넘기지 않음
+    console.log("✅ 체인코드 호출 결과:", result);
 
-    // 필수 필드 검증
-    if (!id || !name || !minDeposit || !interestRate || !durationMonths || !creatorAddress || !initialDeposit) {
-      console.error('필수 필드 누락:', { id, name, minDeposit, interestRate, durationMonths, creatorAddress, initialDeposit });
-      return res.status(400).json({ error: '모든 필수 필드를 입력해주세요.' });
-    }
+    const now = new Date();
+    const end = new Date();
+    end.setMonth(end.getMonth() + parseInt(durationMonths));
 
-    // 모든 숫자 필드를 문자열로 변환
-    const args = [
+    const { error } = await supabase.from('pools').insert({
       id,
       name,
-      minDeposit.toString(),
-      interestRate.toString(),
-      durationMonths.toString(),
-      creatorAddress,
-      initialDeposit.toString()
-    ];
+      min_deposit: minDeposit,
+      interest_rate: interestRate,
+      start_time: now.toISOString(),
+      end_time: end.toISOString(),
+      status: 'Open',
+      total_deposit: 0,
+      total_interest: 0,
+    });
 
-    console.log('🔗 체인코드 호출 → CreatePool()');
-    console.log('📝 CreatePool 인자:', args);
-
-    // 1. 체인코드 호출
-    try {
-      const result = await sdk.send(false, 'CreatePool', args);
-      console.log('🎉 CreatePool 성공 → 응답:', result.toString());
-    } catch (chainError) {
-      console.error('❌ 체인코드 호출 실패:', chainError);
-      return res.status(500).json({ error: '체인코드 호출 실패: ' + chainError.message });
+    if (error) {
+      console.error('❌ Supabase 저장 오류:', error);
+      return res.status(500).json({ error: 'Supabase 저장 실패', detail: error.message });
     }
 
-    // 2. Supabase에 풀 정보 저장
-    const startTime = new Date();
-    const endTime = new Date(startTime);
-    endTime.setMonth(endTime.getMonth() + parseInt(durationMonths));
-
-    // 기본 필드만 포함
-    const poolData = {
-      name,
-      min_deposit: parseInt(minDeposit),
-      interest_rate: parseInt(interestRate),
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
-      status: 'open',
-      total_deposit: parseInt(initialDeposit)
-    };
-
-    console.log('📝 Supabase에 저장할 풀 데이터:', poolData);
-
-    try {
-      const { data: insertedPool, error: poolError } = await supabase
-        .from('pools')
-        .insert(poolData)
-        .select()
-        .single();
-
-      if (poolError) {
-        console.error('❌ Supabase 풀 저장 실패:', poolError);
-        throw new Error('풀 정보 저장 실패: ' + poolError.message);
-      }
-
-      console.log('✅ Supabase 풀 저장 성공:', insertedPool);
-    } catch (dbError) {
-      console.error('❌ Supabase 저장 중 에러:', dbError);
-      return res.status(500).json({ error: '데이터베이스 저장 실패: ' + dbError.message });
-    }
-
-    console.log('✅ 풀 생성 완료');
-    res.json({ message: '풀 생성 완료', poolId: id });
+    return res.status(200).json({ message: '풀 생성 완료', poolId: id });
 
   } catch (err) {
-    console.error('❌ 풀 생성 실패:', err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ 풀 생성 중 서버 오류:', err);
+    return res.status(500).json({ error: '풀 생성 실패', detail: err.message || '서버 오류 발생' });
   }
 });
 
@@ -568,6 +601,7 @@ app.post('/joinPool', async (req, res) => {
   }
 });
 
+
 // ================= 정적 파일 서비스 및 React 라우팅 ==================
 
 // React 앱의 정적 파일 서빙
@@ -575,139 +609,152 @@ const clientPath = path.join(__dirname, '../client/loan-client/build');
 app.use(express.static(clientPath));
 
 // API 라우트는 정적 파일 서빙 전에 정의
-app.get('/QueryPoolsByUser', async (req, res) => {
-  const { wallet } = req.query;
-  if (!wallet) {
-    console.log('지갑 주소 누락');
-    return res.status(400).json({ error: '지갑 주소가 필요합니다.' });
-  }
-
+app.post('/api/inquiry', authenticateUser, async (req, res) => {
   try {
-    console.log('🔗 체인코드 호출 → QueryPoolsByUser(', wallet, ')');
-    const result = await sdk.send(true, 'QueryPoolsByUser', [wallet]);
-    console.log('🎉 QueryPoolsByUser 성공 → 원본 응답:', result);
-    console.log('원본 응답 타입:', typeof result);
-    console.log('원본 응답 문자열:', result?.toString());
-    
-    // 체인코드 응답이 없는 경우
-    if (!result) {
-      console.log('체인코드 응답 없음');
-      return res.json([]);
+    const { name, email, message, captchaToken } = req.body;
+
+    // 필수 필드 검증
+    if (!name || !email || !message || !captchaToken) {
+      return res.status(400).json({ error: '모든 필드를 입력해주세요.' });
     }
 
-    // 체인코드 응답 파싱
-    let pools = [];
+    // reCAPTCHA 검증
+    const isValidCaptcha = await verifyRecaptcha(captchaToken);
+    if (!isValidCaptcha) {
+      return res.status(400).json({ error: '캡챠 인증에 실패했습니다.' });
+    }
+
+    // Supabase에 문의 저장
+    const { data, error: dbError } = await supabase
+      .from('inquiries')
+      .insert([
+        {
+          name,
+          email,
+          message,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }
+      ])
+      .select();
+
+    if (dbError) {
+      console.error('Supabase 에러:', dbError);
+      throw new Error('데이터베이스 저장 중 오류가 발생했습니다.');
+    }
+
+    console.log('저장된 문의:', data);
+
+    // 자동 응답 이메일 전송
     try {
-      // 응답이 Buffer인 경우 문자열로 변환
-      const responseStr = result.toString();
-      console.log('응답 문자열:', responseStr);
-
-      // 빈 문자열이나 null 체크
-      if (!responseStr || responseStr.trim() === '') {
-        console.log('빈 응답 반환');
-        return res.json([]);
+      // 개발 환경에서는 이메일 전송 로그만 출력
+      if (process.env.NODE_ENV === 'development') {
+        console.log('개발 환경: 이메일 전송 시뮬레이션');
+        console.log('수신자:', email);
+        console.log('제목: 문의가 접수되었습니다');
+        console.log('내용:', `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb; margin-bottom: 20px;">문의 접수 확인</h2>
+            <p style="margin-bottom: 15px;">안녕하세요, ${name}님</p>
+            <p style="margin-bottom: 15px;">문의하신 내용이 성공적으로 접수되었습니다.</p>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+            </div>
+            <p style="margin-bottom: 15px;">문의하신 내용을 검토해보겠습니다. 모든 문의사항에 대해 답변을 드리지 못할 수 있음을 양해 부탁드립니다.</p>
+            <p style="margin-bottom: 15px;">추가 문의사항이 있으시면 언제든지 문의해 주세요.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">이 메일은 발신 전용입니다. 문의사항은 고객센터를 이용해 주세요.</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">고객센터: 1234-5678 (평일 09:00 - 18:00)</p>
+          </div>
+        `);
+      } else {
+        // 프로덕션 환경에서는 실제 이메일 전송
+        await resend.emails.send({
+          from: '깐부대출 <noreply@fitend.com>',
+          to: email,
+          subject: '문의가 접수되었습니다',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2563eb; margin-bottom: 20px;">문의 접수 확인</h2>
+              <p style="margin-bottom: 15px;">안녕하세요, ${name}님</p>
+              <p style="margin-bottom: 15px;">문의하신 내용이 성공적으로 접수되었습니다.</p>
+              <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+              </div>
+              <p style="margin-bottom: 15px;">문의하신 내용을 검토해보겠습니다. 모든 문의사항에 대해 답변을 드리지 못할 수 있음을 양해 부탁드립니다.</p>
+              <p style="margin-bottom: 15px;">추가 문의사항이 있으시면 언제든지 문의해 주세요.</p>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+              <p style="color: #6b7280; font-size: 14px; margin: 0;">이 메일은 발신 전용입니다. 문의사항은 고객센터를 이용해 주세요.</p>
+              <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">고객센터: 1234-5678 (평일 09:00 - 18:00)</p>
+            </div>
+          `
+        });
       }
-
-      // JSON 파싱 시도
-      try {
-        // 응답이 이미 객체인 경우
-        if (typeof result === 'object' && result !== null) {
-          console.log('응답이 이미 객체임');
-          pools = result;
-        } else {
-          // 문자열인 경우 JSON 파싱
-          console.log('문자열을 JSON으로 파싱 시도');
-          pools = JSON.parse(responseStr);
-        }
-      } catch (parseError) {
-        console.error('JSON 파싱 실패:', parseError);
-        console.error('파싱 시도한 문자열:', responseStr);
-        // 파싱 실패 시 빈 배열 반환
-        return res.json([]);
-      }
-      
-      // 응답이 배열이 아닌 경우 배열로 변환
-      if (!Array.isArray(pools)) {
-        console.log('단일 풀 객체를 배열로 변환');
-        pools = [pools];
-      }
-      
-      console.log('파싱된 풀 데이터:', pools);
-      
-      // participants와 deposits 필드 보정
-      pools = pools.map(pool => {
-        if (!pool) {
-          console.log('null 풀 데이터 발견');
-          return null;
-        }
-
-        console.log('처리할 풀 데이터:', pool);
-
-        // 문자열로 된 participants와 deposits를 파싱
-        let participants = [];
-        let deposits = {};
-        let joinedAt = {};
-
-        try {
-          if (typeof pool.participants === 'string') {
-            participants = JSON.parse(pool.participants);
-          } else if (Array.isArray(pool.participants)) {
-            participants = pool.participants;
-          }
-
-          if (typeof pool.deposits === 'string') {
-            deposits = JSON.parse(pool.deposits);
-          } else if (typeof pool.deposits === 'object' && pool.deposits !== null) {
-            deposits = pool.deposits;
-          }
-
-          if (typeof pool.joinedAt === 'string') {
-            joinedAt = JSON.parse(pool.joinedAt);
-          } else if (typeof pool.joinedAt === 'object' && pool.joinedAt !== null) {
-            joinedAt = pool.joinedAt;
-          }
-        } catch (parseError) {
-          console.error('풀 데이터 필드 파싱 실패:', parseError);
-        }
-
-        const processedPool = {
-          ...pool,
-          id: pool.id || pool.ID, // ID 필드 통일
-          participants: Array.isArray(participants) ? participants : [],
-          deposits: typeof deposits === 'object' && deposits !== null ? deposits : {},
-          joinedAt: typeof joinedAt === 'object' && joinedAt !== null ? joinedAt : {},
-          status: pool.status || 'Open',
-          creator_address: pool.creator_address || pool.creatorAddress || wallet // 생성자 주소 추가
-        };
-        console.log('처리된 풀:', processedPool);
-        return processedPool;
-      }).filter(Boolean); // null 값 제거
-
-    } catch (parseError) {
-      console.error('풀 데이터 처리 실패:', parseError);
-      console.error('원본 응답:', result.toString());
-      return res.status(500).json({ error: '풀 데이터 처리 실패' });
+    } catch (emailError) {
+      console.error('이메일 전송 에러:', emailError);
+      // 이메일 전송 실패는 전체 프로세스를 실패시키지 않음
     }
-    
-    console.log('최종 반환할 풀 목록:', pools);
-    return res.json(pools);
-  } catch (err) {
-    console.error('사용자 풀 조회 실패:', err);
-    return res.status(500).json({ error: err.message });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('문의하기 에러:', error);
+    res.status(500).json({ error: error.message || '문의 접수 중 오류가 발생했습니다.' });
   }
 });
 
-// 마지막에만 index.html 반환 (SPA 대응용)
-// "캐치올" 라우트: 위에서 매칭되지 않은 모든 GET 요청에 대해 index.html을 내보낸다
-app.get('*', function (req, res) {
-  res.sendFile(path.join(clientPath, 'index.html'));
-});
+// reCAPTCHA 검증 함수
+async function verifyRecaptcha(token) {
+  try {
+    const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+      params: {
+        secret: process.env.RECAPTCHA_SECRET_KEY,
+        response: token
+      },
+      timeout: 5000, // 5초 타임아웃
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
 
-// 서버 시작
-app.listen(PORT, HOST, async () => {
-  console.log(`서버 시작중 => http://${HOST}:${PORT}/`);
-  // 서버 시작 직후 동기화 실행
-  await syncWalletsToChaincode();
+    if (!response.data.success) {
+      console.error('reCAPTCHA 검증 실패:', response.data['error-codes']);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error.message);
+    // 네트워크 오류 시에도 true 반환 (개발 환경에서만 ★실제 배포될경우 네트워크 오류시에는 false로 꼭 바꿔야함 꼭!!)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('개발 환경: reCAPTCHA 검증 우회');
+      return true;
+    }
+    return false;
+  }
+}
+
+// 이메일 확인 API
+app.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Supabase에서 사용자 확인
+    const { data: { users }, error } = await supabase.auth.admin.listUsers();
+    if (error) throw error;
+    
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      return res.json({ exists: false });
+    }
+    
+    return res.json({
+      exists: true,
+      provider: user.app_metadata.provider || 'email'
+    });
+  } catch (error) {
+    console.error('이메일 확인 에러:', error);
+    res.status(500).json({ error: '이메일 확인 중 오류가 발생했습니다.' });
+  }
 });
 
 // ================= 지갑 동기화 함수 ==================
@@ -744,3 +791,355 @@ async function syncWalletsToChaincode() {
     console.error('지갑 동기화 전체 실패:', e);
   }
 }
+
+// 서버 시작
+app.listen(PORT, HOST, async () => {
+  console.log(`서버 시작중 => http://${HOST}:${PORT}/`);
+  // 서버 시작 직후 동기화 실행
+  await syncWalletsToChaincode();
+});
+
+// ================= 친구 API ==================
+
+// 친구 추가 요청
+app.post('/api/friends/add', authenticateUser, async (req, res) => {
+  const { userId, friendEmail } = req.body;
+
+  try {
+    // 친구 이메일로 사용자 검색
+    const { data: targetUser, error: searchError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', friendEmail)
+      .single();
+
+    if (searchError || !targetUser) {
+      return res.status(404).json({ error: '해당 이메일의 사용자를 찾을 수 없습니다.' });
+    }
+
+    // 기존 친구 요청 확인
+    const { data: existing, error: existingError } = await supabase
+      .from('friends')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('friend_user_id', targetUser.id)
+      .maybeSingle();
+
+    if (existing && existing.status === 'pending') {
+      return res.status(400).json({ error: '이미 친구 요청을 보냈습니다.' });
+    }
+
+    // 친구 요청 추가
+    const { error: insertError } = await supabase.from('friends').insert([
+      {
+        user_id: userId,
+        friend_user_id: targetUser.id,
+        status: 'pending',
+      },
+    ]);
+
+    if (insertError) {
+      return res.status(500).json({ error: '친구 요청 추가 중 오류가 발생했습니다.' });
+    }
+
+    res.status(200).json({ message: '친구 요청이 전송되었습니다.' });
+  } catch (err) {
+    console.error('친구 추가 요청 처리 중 오류:', err);
+    res.status(500).json({ error: '친구 추가 요청 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+
+// =============================================
+// 친구 목록 조회
+// GET /api/friends
+// =============================================
+app.get('/api/friends', authenticateUser, async (req, res) => {
+  const myId = req.user.id; // 인증 미들웨어가 붙여넣은 현재 사용자의 UUID
+
+  try {
+    // 1) 내가 user_id인 친구 관계 (내가 보낸 요청, status='accepted')
+    //    -> friend_user_id 컬럼이 상대방 프로필의 UUID
+    const { data: sentRows, error: sentErr } = await supabase
+      .from('friends')
+      .select('friend_user_id')
+      .eq('user_id', myId)
+      .eq('status', 'accepted');
+    if (sentErr) {
+      console.error('[Server] Supabase sentRows 에러 →', sentErr);
+      return res.status(500).json({ error: '친구 조회 실패(1)' });
+    }
+
+    // 2) 내가 friend_user_id인 친구 관계 (내가 받은 요청, status='accepted')
+    //    -> user_id 컬럼이 상대방 프로필의 UUID
+    const { data: receivedRows, error: recErr } = await supabase
+      .from('friends')
+      .select('user_id')
+      .eq('friend_user_id', myId)
+      .eq('status', 'accepted');
+    if (recErr) {
+      console.error('[Server] Supabase receivedRows 에러 →', recErr);
+      return res.status(500).json({ error: '친구 조회 실패(2)' });
+    }
+
+    // 3) 위 두 배열을 합쳐서, 중복 없이 “친구의 프로필 ID”만 모은다
+    const partnerIds = [
+      ...sentRows.map(r => r.friend_user_id),
+      ...receivedRows.map(r => r.user_id)
+    ]
+      .filter((v, i, a) => v && a.indexOf(v) === i);
+
+    // 친구가 아무도 없으면 빈 배열 반환
+    if (partnerIds.length === 0) {
+      return res.status(200).json({ friends: [] });
+    }
+
+    // 4) profiles 테이블에서 partnerIds에 해당하는 row들을 한 번에 가져온다
+    //    – 칼럼 선택 시 avatar_url 대신 profile_image_url 로 수정
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, profile_image_url')
+      .in('id', partnerIds);
+    if (profErr) {
+      console.error('[Server] Supabase 프로필 조회 에러 →', profErr);
+      return res.status(500).json({ error: '프로필 조회 실패' });
+    }
+
+    // 5) 프론트가 기대하는 형태로 포맷
+    //    { id, profile: { id, name, email, profile_image_url } }
+    const friends = profiles.map(p => ({
+      id: p.id,
+      profile: {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        profile_image_url: p.profile_image_url || null
+      }
+    }));
+
+    console.log('[Server] 최종 friends →', friends);
+    return res.status(200).json({ friends });
+  } catch (err) {
+    console.error('[Server] /api/friends 에러 →', err);
+    return res.status(500).json({ error: '친구 목록 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+
+// =============================================
+// 받은 친구 요청 조회
+// GET /api/friends/received
+// =============================================
+app.get('/api/friends/received', authenticateUser, async (req, res) => {
+  const myId = req.user.id;
+
+  try {
+    // 1) 내게 온(friend_user_id = myId) status='pending'인 친구 요청
+    const { data: rows, error: rowsErr } = await supabase
+      .from('friends')
+      .select('id, user_id')   // id: friends PK, user_id: 요청 보낸 쪽 UUID
+      .eq('friend_user_id', myId)
+      .eq('status', 'pending');
+    if (rowsErr) {
+      console.error('[Server] /api/friends/received 조회 에러 →', rowsErr);
+      return res.status(500).json({ error: '받은 요청 조회 실패' });
+    }
+
+    // 2) 요청 보낸 쪽(user_id) 프로필만 가져오기 (id, name, email, profile_image_url)
+    const senderIds = rows.map(r => r.user_id).filter(v => v);
+    if (senderIds.length === 0) {
+      return res.status(200).json({ requests: [] });
+    }
+
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, profile_image_url')
+      .in('id', senderIds);
+    if (profErr) {
+      console.error('[Server] Supabase 프로필 조회 에러 →', profErr);
+      return res.status(500).json({ error: '프로필 조회 실패' });
+    }
+
+    // 3) friends 테이블의 row(id, user_id)와 profiles(row) 정보를 묶어서 반환
+    //    { id: <friends PK>, user_id: <보낸 쪽 UUID>, profile: { … } }
+    const requests = rows.map(r => {
+      const prof = profiles.find(p => p.id === r.user_id);
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        profile: prof || { id: r.user_id, name: null, email: null, profile_image_url: null }
+      };
+    });
+
+    return res.status(200).json({ requests });
+  } catch (err) {
+    console.error('[Server] /api/friends/received 에러 →', err);
+    return res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 친구 요청 수락/거절
+app.patch('/api/friends/request', async (req, res) => {
+  const { requestId, status } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('friends')
+      .update({ status })
+      .eq('id', requestId);
+
+    if (error) {
+      return res.status(500).json({ error: '친구 요청 업데이트 중 오류가 발생했습니다.' });
+    }
+
+    res.status(200).json({ message: '친구 요청이 업데이트되었습니다.' });
+  } catch (err) {
+    console.error('친구 요청 업데이트 처리 중 오류:', err);
+    res.status(500).json({ error: '친구 요청 업데이트 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+// 트랜잭션 해시로 거래 내역 조회
+app.get('/api/transaction/:txHash', async (req, res) => {
+  try {
+    const { txHash } = req.params;
+    if (!txHash) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '트랜잭션 해시가 필요합니다.' 
+      });
+    }
+
+    // 1. Supabase에서 해당 트랜잭션 해시로 대출 정보 조회
+    const { data: loan, error: loanError } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('tx_hash', txHash)
+      .single();
+
+    if (loanError) {
+      console.error('대출 정보 조회 실패:', loanError);
+      return res.status(404).json({ 
+        success: false, 
+        message: '해당 트랜잭션의 대출 정보를 찾을 수 없습니다.' 
+      });
+    }
+
+    // 2. 체인코드에서 트랜잭션 정보 조회
+    const chainResult = await sdk.send(true, 'QueryLoanRequest', [loan.id]);
+    
+    // 3. 응답 데이터 구성
+    const response = {
+      success: true,
+      transaction: {
+        txHash: loan.tx_hash,
+        contractHash: loan.contract_hash,
+        createdAt: loan.created_at,
+        loanInfo: chainResult,
+        // 추가 정보
+        verification: {
+          isContractValid: loan.contract_hash ? true : false,
+          isTransactionValid: true, // 체인코드에서 조회 성공하면 유효한 것
+          lastVerified: new Date().toISOString()
+        }
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('트랜잭션 조회 실패:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '트랜잭션 조회 중 오류가 발생했습니다.',
+      error: error.message 
+    });
+  }
+});
+
+// 마지막에만 index.html 반환 (SPA 대응용)
+app.get('*', function (req, res) {
+  res.sendFile(path.join(clientPath, 'index.html'));
+});
+
+// 계약서 해시 생성 함수
+async function generateContractHash(contractImage) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    hash.update(contractImage);
+    resolve(hash.digest('hex'));
+  });
+}
+
+// 계약서 다운로드 및 해시 검증
+app.get('/api/contract/verify', async (req, res) => {
+  const { loanId, contractImage } = req.query;
+  
+  try {
+    // 1. loans 테이블에서 계약서 해시 조회
+    const { data: loan, error } = await supabase
+      .from('loans')
+      .select('contract_hash')
+      .eq('id', loanId)
+      .single();
+      
+    if (error) throw error;
+    
+    // 2. 현재 계약서 이미지의 해시 생성
+    const currentHash = await generateContractHash(contractImage);
+    
+    // 3. 해시 비교
+    const isValid = currentHash === loan.contract_hash;
+    
+    res.json({ 
+      isValid,
+      message: isValid ? '계약서가 유효합니다.' : '계약서가 조작되었습니다.'
+    });
+  } catch (err) {
+    console.error('계약서 검증 중 오류:', err);
+    res.status(500).json({ error: '계약서 검증 중 오류가 발생했습니다.' });
+  }
+});
+
+// 계약서 저장 및 해시 생성
+app.post('/api/contract/save', async (req, res) => {
+  try {
+    const { loanId, contractImage } = req.body;
+    if (!loanId || !contractImage) {
+      return res.status(400).json({ message: '대출 ID와 계약서 이미지가 필요합니다.' });
+    }
+
+    // 계약서 해시 생성
+    const contractHash = await generateContractHash(contractImage);
+    console.log('생성된 계약서 해시:', contractHash);
+
+    // Supabase에 해시 저장
+    const { data, error } = await supabase
+      .from('loans')
+      .update({ 
+        contract_hash: contractHash,
+        created_at: getKoreanTime()
+      })
+      .eq('id', loanId)
+      .select();
+
+    if (error) {
+      console.error('Supabase 업데이트 에러:', error);
+      throw error;
+    }
+
+    console.log('계약서 해시 저장 성공:', data);
+    res.json({ 
+      success: true,
+      message: '계약서 해시가 저장되었습니다.', 
+      contractHash,
+      data 
+    });
+  } catch (error) {
+    console.error('계약서 해시 저장 실패:', error);
+    res.status(500).json({ 
+      success: false,
+      message: '계약서 해시 저장 실패',
+      error: error.message 
+    });
+  }
+});
