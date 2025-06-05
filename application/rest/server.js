@@ -1249,6 +1249,61 @@ app.get('/api/transaction/:txHash', async (req, res) => {
   }
 });
 
+//================= 자금현황 api ==================
+
+//거래상대 이름 가져오기
+app.post('/getName', async (req, res) => {
+  const { userId } = req.body;
+  console.log('요청 받은 userId:', userId);
+
+  if (!userId) return res.status(400).json({ error: 'userId가 필요합니다.' });
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: '이름을 찾을 수 없습니다.' });
+    }
+
+    res.json(data.name);
+  } catch (err) {
+    console.error('[getName 오류]', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+
+// 로그인한 사용자의 전체 대출 거래 기록 조회 (빌려준 것 + 빌린 것)
+app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
+  const { userId } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('wallet_transactions')
+      .select('id, type, amount, loan_id, related_user_id, created_at')
+      .or(`user_id.eq.${userId},related_user_id.eq.${userId}`)
+      .in('type', ['loan_sent', 'loan_received'])
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('대출 거래 기록 조회 실패:', err);
+    res.status(500).json({ error: '대출 기록 조회 실패' });
+  }
+});
+
+
+// 마지막에만 index.html 반환 (SPA 대응용)
+app.get('*', function (req, res) {
+  res.sendFile(path.join(clientPath, 'index.html'));
+});
+
 // 계약서 해시 생성 함수
 async function generateContractHash(contractImage) {
   return new Promise((resolve, reject) => {
@@ -1331,48 +1386,6 @@ app.post('/api/contract/save', async (req, res) => {
     });
   }
 });
-
-////////////////////////////////////////////////////////////////////////////////
-// Supabase에서 모든 사용자별 잔액(balance) 계산
-////////////////////////////////////////////////////////////////////////////////
-// async function fetchBalancesFromSupabase() {
-//   /**
-//    * Supabase의 wallet_transactions 테이블에서
-//    * user_id 별로 SUM(amount)를 계산하여 잔액을 구함.
-//    * amount 컬럼은 입금이면 +값, 출금/대출 송금이면 –값, 대출 수령이면 +값, 상환이면 –값 등으로 INSERT.
-//    */
-//   try {
-//     // Supabase SQL RPC 호출 또는 query builder 사용
-//     // 여기서는 query builder 방식 예시:
-//     let { data, error } = await supabase
-//       .from('wallet_transactions')
-//       .select('user_id, amount')
-//       .order('user_id', { ascending: true });
-
-//     if (error) {
-//       throw error;
-//     }
-
-//     // 사용자별 합계 계산(메모리에 모두 적재 후 집계)
-//     const balanceMap = {}; // { user_id: balance }
-//     data.forEach((row) => {
-//       const uid = row.user_id;
-//       const amt = parseFloat(row.amount);
-//       if (!balanceMap[uid]) {
-//         balanceMap[uid] = 0;
-//       }
-//       balanceMap[uid] += amt;
-//     });
-
-//     // 결과 출력 (디버그용)
-//     console.log('▶ Supabase에서 계산된 잔액 Map:', balanceMap);
-
-//     return balanceMap; // { 'uuid1': 12345.67, 'uuid2': -100.00, ... }
-//   } catch (err) {
-//     console.error('Supabase 잔액 집계 에러:', err);
-//     throw err;
-//   }
-// }
 
 // 마지막에만 index.html 반환 (SPA 대응용)
 app.get('*', function (req, res) {

@@ -406,3 +406,28 @@ export const downloadAndSaveContract = async (loanId, contractImage) => {
     throw error;
   }
 };
+
+
+// 내 대출 거래 기록 조회
+export const getMyLoanTransactions = async (userId) => {
+  try {
+    const response = await api.post('/myLoanTransactions', { userId }); // ✅ POST로 변경
+    return response.data.data;
+  } catch (error) {
+    console.error('내 대출 거래 기록 조회 실패:', error);
+    throw error;
+  }
+};
+
+// 유저 이름 조회
+export const getNameById = async (userId) => {
+  try {
+    const res = await api.post('/getName', { userId });
+    console.log('[✅ getNameById 응답]', res.data);
+    return res.data;
+  } catch (err) {
+    console.error('[❌ getNameById 실패]', err.response?.data || err.message);
+    throw err;
+  }
+};
+
