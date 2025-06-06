@@ -269,7 +269,7 @@ const LoanPool = () => {
     return filtered;
   };
 
-  const renderPoolCard = (pool) => {
+  const renderPoolCard = (당구) => {
     const isJoined = hasJoinedPool(pool.id);
     const isOpen = pool.status === 'Open' || pool.status === 'open';
     const isJoiningThis = joiningPoolId === pool.id;
@@ -334,18 +334,6 @@ const LoanPool = () => {
           <span className="w-2 h-2 mr-2 bg-blue-600 rounded-full"></span>
           지갑 연결됨
         </button>
-        <button
-              onClick={handleCreatePool}
-              className={`
-                px-4 py-2 text-sm rounded-md
-                ${isCreating 
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'}
-              `}
-              disabled={isCreating}
-            >
-              {isCreating ? '생성 중...' : '+ 새 풀 만들기'}
-            </button>
               </div>
 
       {/* 새 풀 생성 폼 */}
@@ -377,20 +365,7 @@ const LoanPool = () => {
             <input value={initialDeposit} onChange={(e) => setInitialDeposit(e.target.value)} className="w-full p-2 text-sm border rounded-md" placeholder="KRW" />
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <button
-              onClick={() => {
-                // 폼 초기화
-                setPoolName('');
-                setMinDeposit('');
-                setInterestRate('');
-                setDuration('3');
-                setInitialDeposit('');
-              }}
-              className="px-4 py-2 text-sm border rounded-md"
-            >
-            취소
-          </button>          
+        <div className="flex justify-end gap-2 mt-6">        
           <button
             onClick={handleCreatePool}
             className={`
@@ -491,4 +466,4 @@ const LoanPool = () => {
   );
 };
 
-export default LoanPool;
+export default LoanPool; 

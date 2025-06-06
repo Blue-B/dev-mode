@@ -33,7 +33,7 @@ export default function FriendLoanRequest() {
   const [friends, setFriends] = useState([]);
   const [userWalletAddress, setUserWalletAddress] = useState('');
   const [loanAgreementData, setLoanAgreementData] = useState(null);
-
+  const [borrowerProfile, setBorrowerProfile] = useState(null);
   
   useEffect(() => {
     const fetchUserWallet = async () => {
@@ -41,6 +41,7 @@ export default function FriendLoanRequest() {
 
         try {
             const profile = await getUserProfile(user.id);
+            setBorrowerProfile(profile);
             setBorrowerName(profile?.name || '나'); // 이름 설정
             setUserWalletAddress(profile.wallet_id);
         
@@ -271,6 +272,7 @@ export default function FriendLoanRequest() {
       setLoanAgreementData({
         loanData: loanData,
         selectedFriend: selectedFriend,
+        borrowerProfile,     
         estimatedRepaymentDate: formattedEndDate,        // "YYYY. M. D." 또는 "yyyy년 M월 d일"
         totalRepayment: calculateTotalRepayment(),
         startDate: formattedToday,
@@ -724,6 +726,7 @@ export default function FriendLoanRequest() {
           <LoanAgreement
             loanData={loanAgreementData.loanData}
             selectedFriend={loanAgreementData.selectedFriend}
+            borrowerProfile={borrowerProfile}
             estimatedRepaymentDate={loanAgreementData.estimatedRepaymentDate}
             totalRepayment={loanAgreementData.totalRepayment}
             startDate={loanAgreementData.startDate}

@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { HandHeart } from 'lucide-react';
 import { motion } from "framer-motion";
 import Footer from "../components/Footer";
+import LoanAgreement from './contract/LoanAgreement';
 
 // 금액을 한글 단위로 변환하는 유틸리티 함수
 const formatAmount = (amount) => {
@@ -43,11 +44,20 @@ const Dashboard = () => {
     const {user} = useAuth();
     const navigate = useNavigate();
 
+    // 모달 상태
+    const [showContractModal, setShowContractModal] = useState(false);
+    const [modalLoanData, setModalLoanData] = useState(null);
+    const [modalLenderProfile, setModalLenderProfile] = useState(null);
+    const [modalBorrowerProfile, setModalBorrowerProfile] = useState(null);
+
+    const [myProfile, setMyProfile] = useState(null);
+
     const fetchBalance = async () => {
         if (!user?.id) return;
         try {
             const wallet = await getUserWalletAddress(user.id);
             const balance = await getWalletBalance(wallet);
+            
             setWalletAddress(wallet);
             setBalance(balance);
         } catch (error) {
@@ -97,7 +107,8 @@ const Dashboard = () => {
             if (!user?.id) return;
             try {
                 const profile = await getUserProfile(user.id);
-                
+                setMyProfile(profile);
+
                 setCreditScore(profile.credit_score ?? 0);
                 setPrevScore(profile.prev_credit_score ?? 0);
 
@@ -245,6 +256,93 @@ const Dashboard = () => {
     };
 
 
+    // ─────────── 여기서 “계약서 보기” 버튼 클릭 시 호출 ───────────
+   const openContractModal = (loan) => {
+    // 1. 현재 로그인 사용자가 채권자인지 확인
+    const isLender = loan.lender === walletAddress;
+
+    // 2. 채권자·채무자 프로필 설정
+    //    - 만약 모달을 여는 사람이 채권자(isLender===true)라면,
+    //      lenderProfile = 내 프로필(myProfile), borrowerProfile = 친구 프로필
+    //    - 모달을 여는 사람이 차입자(isLender===false)라면,
+    //      lenderProfile = 친구 프로필, borrowerProfile = 내 프로필(myProfile)
+    const lenderProfile = isLender
+      ? {  
+          // 내 프로필 객체: getUserProfile 결과를 profileMap에 미리 저장해 둔 경우라면
+          // profileMap[loan.lender]을 써도 되고, myProfile을 따로 가져오셨다면 그것을 사용해도 됩니다.
+          // 예를 들어 myProfile 상태에 프로필 전체가 들어 있다면:
+          id: myProfile.id,
+          name: myProfile.name,
+          birth_number: myProfile.birth_number,
+          phone: myProfile.phone,
+          address: myProfile.address,
+          wallet_id: myProfile.wallet_id
+        }
+      : profileMap[loan.lender] || { 
+          // 만약 친구 프로필이 profileMap에 없으면,
+          name: loan.lender,
+          birth_number: "",
+          phone: "",
+          address: "",
+          wallet_id: loan.lender
+        };
+
+    const borrowerProfile = isLender
+      ? (profileMap[loan.borrower] || {
+          name: loan.borrower,
+          birth_number: "",
+          phone: "",
+          address: "",
+          wallet_id: loan.borrower
+        })
+      : {  
+          id: myProfile.id,
+          name: myProfile.name,
+          birth_number: myProfile.birth_number,
+          phone: myProfile.phone,
+          address: myProfile.address,
+          wallet_id: myProfile.wallet_id
+        };
+
+    // 3. 계약서 날짜·금액 계산 (기존 로직 그대로)
+    const startMs = Number(loan.startTime) * 1000;
+    const endMs = startMs + Number(loan.durationDays) * 24 * 60 * 60 * 1000;
+    const startDate = new Date(startMs).toLocaleDateString("ko-KR");
+    const endDate = new Date(endMs).toLocaleDateString("ko-KR");
+
+    const totalRepayment =
+      loan.totalRepayment ??
+      (Number(loan.amount) +
+        (Number(loan.interestRate) *
+          Number(loan.amount) *
+          (Number(loan.durationDays) / 365)) /
+          100);
+
+    // 4. modalLoanData에 “항상 lenderProfile이 ‘채권자’, borrowerProfile이 ‘채무자’”로 되도록 저장
+    setModalLoanData({
+      id: loan.id,
+      lender: loan.lender,
+      borrower: loan.borrower,
+      amount: loan.amount,
+      interestRate: loan.interestRate,
+      durationMonths: loan.durationDays / 30,
+      durationDays: loan.durationDays,
+      bankAccount: loan.bankAccount || "신한은행 123-456-789012 (예금주: 홍길동)",
+      message: loan.message || "",
+      startDate,
+      endDate,
+      totalRepayment
+    });
+
+    // 5. 모달에서 사용할 양쪽 프로필을 상태로 저장
+  setModalLenderProfile(lenderProfile);
+  setModalBorrowerProfile(borrowerProfile);
+
+
+    // 6. 모달 열기
+    setShowContractModal(true);
+  };
+    
     return (
         <div className="bg-white text-gray-800 p-4 sm:p-8 md:p-12 lg:p-20 text-[15px] sm:text-[17px]">
             {/* 상단 카드 */}
@@ -377,24 +475,17 @@ const Dashboard = () => {
                                     </p>
                                 </div>
 
-                                {/* 오른쪽: Pending 버튼 또는 상태 뱃지 */}
+                                {/* 오른쪽: Pending 상태인 경우, 대출자가 로그인했으면 “계약서 보기” 버튼 */}
                                 <div className="flex items-center space-x-2">
                                     {loan.status === 'Pending' && isLender && (
-                                        <>
-                                            <button
-                                                onClick={() => handleApproveLoan(loan.id)}
-                                                className="px-2 py-1 text-xs text-green-600 rounded-md sm:text-sm bg-green-50 sm:px-3 hover:bg-green-100"
-                                            >
-                                                수락
-                                            </button>
-                                            <button
-                                                onClick={() => handleDenyLoan(loan.id)}
-                                                className="px-2 py-1 text-xs text-red-500 rounded-md sm:text-sm bg-red-50 sm:px-3 hover:bg-red-100"
-                                            >
-                                                거절
-                                            </button>
-                                        </>
+                                    <button
+                                        onClick={() => openContractModal(loan)}
+                                        className="px-3 py-1 text-xs text-blue-600 rounded-md bg-blue-50 sm:text-sm sm:px-4 hover:bg-blue-100"
+                                    >
+                                        계약서 보기
+                                    </button>
                                     )}
+
                                     {loan.status === 'Active' && (
                                         <div className="flex items-center space-x-2">
                                             <span className="px-2 py-1 text-xs text-green-600 rounded-md sm:text-sm bg-green-50 sm:px-3">
@@ -432,6 +523,38 @@ const Dashboard = () => {
                 </div>
                 )}
             </div>
+
+            {/* ─────────── LoanAgreement 모달 렌더링 ─────────── */}
+            {showContractModal && modalLoanData && modalLenderProfile && modalBorrowerProfile && (
+                    <LoanAgreement
+                    loanData={modalLoanData}
+                    // 여기에 반드시 “채권자 프로필”을 먼저, “채무자 프로필”을 두 번째 인자로 넘겨줍니다.
+                    selectedFriend={modalLenderProfile}    // 채권자 정보
+                    borrowerProfile={modalBorrowerProfile} // 채무자 정보
+                    estimatedRepaymentDate={modalLoanData.endDate}
+                    totalRepayment={modalLoanData.totalRepayment}
+                    startDate={modalLoanData.startDate}
+                    endDate={modalLoanData.endDate}
+                    onClose={() => {
+                        setShowContractModal(false);
+                        setModalLoanData(null);
+                        setModalLenderProfile(null);
+                        setModalBorrowerProfile(null);
+                    }}
+                    onApprove={async () => {
+                        // 체인코드 approve 호출
+                        await approveLoan(modalLoanData.id);
+                        alert("대출 요청을 승인했습니다.");
+                        await loadMyLoans();
+                        await fetchBalance();
+                    }}
+                    onReject={async () => {
+                        await denyLoan(modalLoanData.id);
+                        alert("대출 요청을 거절했습니다.");
+                        await loadMyLoans();
+                    }}
+                    />
+                )}
         </div>
     );
 

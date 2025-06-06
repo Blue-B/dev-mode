@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from '../../contexts/AuthContext';
-import { createLoan, getUserProfile } from '../../services/api';
+import { createLoan, getUserProfile, approveLoan, denyLoan, downloadAndSaveContract } from '../../services/api';
 import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
 import { X, FileText, PenTool } from "lucide-react";
@@ -13,14 +12,18 @@ const supabase = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.RE
 export default function LoanAgreement({
   loanData,
   selectedFriend,
+  borrowerProfile,
   estimatedRepaymentDate,
   totalRepayment,
   startDate,
   endDate,
   goToPreviousStep,
-  goToNextStep
+  goToNextStep,
+  onClose,      // 모달 닫기 콜백
+  onApprove,    // 승인 시 호출될 콜백
+  onReject      // 거절 시 호출될 콜백
 }) {
-  const navigate = useNavigate();
+
   const [showDetailedContract, setShowDetailedContract] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentSigner, setCurrentSigner] = useState(null);
@@ -31,7 +34,6 @@ export default function LoanAgreement({
  
   const [isRequesting, setIsRequesting] = useState(false);
   const { user } = useAuth();
-  const isLoggedIn = !!user;
   
   const [myProfile, setMyProfile] = useState(null); // 현재 로그인된 사용자의 프로필
    
@@ -84,13 +86,13 @@ export default function LoanAgreement({
     lenderPhone: selectedFriend?.phone || "010-8674-7678",
     lenderAddress: selectedFriend?.address || "충남 천안시 서북구",
 
-    // (2) 대출받는 사람(차입자) 정보: 내 프로필에서 가져옴
-    borrowerName: myProfile?.name || "",
-    borrowerSSN: myProfile?.birth_number 
-        ? `${myProfile.birth_number}-${"*".repeat(7)}`
-        : "010120-3******",
-    borrowerPhone: myProfile?.phone || "010-8674-7678",
-    borrowerAddress: myProfile?.address || "충남 천안시 서북구",
+    // (2) 채무자 정보: borrowerProfile에서 가져온다
+    borrowerName: borrowerProfile?.name || "",
+    borrowerSSN: borrowerProfile?.birth_number
+      ? `${borrowerProfile.birth_number}-${"*".repeat(7)}`
+      : "",
+    borrowerPhone: borrowerProfile?.phone || "",
+    borrowerAddress: borrowerProfile?.address || "",
 
     guarantor: "김보증 (주민등록번호: 010120-3******, 주소: 충남 천안시 서북구)"
   };
@@ -177,6 +179,82 @@ export default function LoanAgreement({
   };
   
 
+    // “승인하기” 버튼 클릭 핸들러
+  const handleApprove = async () => {
+    if (isRequesting) return;
+    setIsRequesting(true);
+
+    try {
+      // ─────────────── (1) 오프스크린 DetailedContract 캡처 + 자동 다운로드 ───────────────
+      if (downloadRef.current) {
+        // DOM이 충분히 렌더링될 시간을 잠시 주기 (100ms 정도)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // html2canvas로 캡처
+        const canvas = await html2canvas(downloadRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
+
+        // Blob으로 변환 후 자동 다운로드
+        await new Promise((res) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `대출계약서_${loanData.lender}_${loanData.borrower}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+            res(null);
+          }, "image/png");
+        });
+
+        // 동일한 canvas 객체에서 Base64 문자열 추출
+        const base64DataUrl = canvas.toDataURL("image/png");
+
+        // (2) 서버에 계약서 저장 + 해시 남기기 (예: downloadAndSaveContract API 사용)
+        //    downloadAndSaveContract 함수가 (loanId, contractImage) 형태로 정의되어 있어야 함
+        await downloadAndSaveContract(loanData.id, base64DataUrl);
+      }
+
+      // ─────────────── (3) 실제 승인 API 호출 (부모 콜백) ───────────────
+      await onApprove();
+
+      // 모달 닫기
+      onClose();
+    } catch (error) {
+      console.error("승인 처리 실패:", error);
+      alert("승인 중 오류가 발생했습니다.");
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  // 계약서 거절 처리
+  const handleReject = async () => {
+    setIsRequesting(true);
+    try {
+      await denyLoan(loanData.id);
+      onReject();   // 부모에게 “거절됨”을 알리는 콜백 호출
+    } catch (error) {
+      console.error("거절 처리 실패:", error);
+      alert("거절 중 오류가 발생했습니다.");
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  // 현재 로그인된 사용자가 “대출자(채권자)” 인지 여부 확인
+  const isLender = myProfile?.wallet_id === loanData.lender;
+  // 6) 현재 로그인된 사용자가 “차입자”인지 체크
+  const isBorrower = myProfile?.wallet_id === loanData.borrower;
+  
   return (
     <>
       {showDetailedContract ? (
@@ -240,6 +318,10 @@ export default function LoanAgreement({
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-900">(갑)채권자</h3>
                     <div className="space-y-1.5 text-xs">
+                     <div className="flex justify-between">
+                      <span className="text-gray-600">이름</span>
+                      <span className="font-medium text-right text-gray-900">{contractData.lenderName}</span>
+                    </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주소</span>
                         <span className="font-medium text-right text-gray-900">{contractData.lenderAddress}</span>
@@ -259,9 +341,13 @@ export default function LoanAgreement({
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-900">(을)채무자</h3>
                     <div className="space-y-1.5 text-xs">
+                     <div className="flex justify-between">
+                        <span className="text-gray-600">이름</span>
+                        <span className="font-medium text-right text-gray-900">{contractData.borrowerName}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주소</span>
-                        <span className="font-medium text-right text-gray-900">{contractData.borrowerName}</span>
+                        <span className="font-medium text-right text-gray-900">{contractData.borrowerAddress}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주민등록번호</span>
@@ -305,14 +391,18 @@ export default function LoanAgreement({
                 
                 {/* Main Action Button */}
                 <div className="pt-2 pb-4">
-                  <button 
+                {/* 8) 차입자(Borrower)인 경우, “대출 요청하기” 버튼 */}
+                {isBorrower && (
+                  <button
                     onClick={handleSendLoan}
                     disabled={isRequesting}
-                    className={`w-full py-3 text-sm font-medium text-white transition-colors rounded-xl 
-                      ${isRequesting ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-6 py-3 text-sm font-medium text-white rounded-lg ${
+                      isRequesting ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+                    }`}
                   >
-                    {isRequesting ? '요청 중...' : '대출 요청하기'}
+                    {isRequesting ? "요청 중..." : "대출 요청하기"}
                   </button>
+                )}
                 </div>
               </div>
             </div>
@@ -346,6 +436,26 @@ export default function LoanAgreement({
           onSave={handleSaveSignature}
         />
       )}
+
+          {/* ───── 하단 버튼: “승인/거절”은 채권자에게만 보여줘야 함 ───── */}
+        {isLender && (
+          <div className="flex items-center justify-end gap-4 px-6 py-4 border-t bg-gray-50">
+            <button
+              onClick={handleReject}
+              disabled={isRequesting}
+              className="px-6 py-3 text-sm font-medium text-red-600 rounded-lg bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              거절하기
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={isRequesting}
+              className="px-6 py-3 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              승인하기
+            </button>
+          </div>
+        )}
     </>
   );
 }
