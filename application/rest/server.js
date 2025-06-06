@@ -263,36 +263,104 @@ function getKoreanTime() {
 }
 
 // 대출 요청 생성
+// app.post('/createLoan', async function (req, res) {
+//   const { id, lender, borrower, amount, durationDays, interestRate, contractImage } = req.body;
+//   const args = [id, lender, borrower, amount, durationDays, interestRate];
+
+//   try {
+//     const txId = await sdk.send(false, 'CreateLoanRequest', args); // txId 반환됨
+
+//     // 체인 호출 성공 → Supabase에 해시 정보만 저장
+//     const { error } = await supabase.from('loans').insert([{
+//       id: id,                    // 체인에 저장한 loan ID를 그대로 사용
+//       loan_chain_id: id,         // 체인에 저장한 loan ID
+//       tx_hash: txId,             // 블록체인 트랜잭션 ID
+//       created_at: getKoreanTime() // 한국 시간으로 저장
+//     }]);
+
+//     if (error) {
+//       console.error('❌ DB 저장 실패:', error);
+//       return res.status(500).json({ error: 'DB 저장 실패' });
+//     }
+
+//     return res.json({ 
+//       message: 'Loan created on chain and DB', 
+//       txId
+//     });
+
+//   } catch (err) {
+//     console.error('❌ 체인 오류:', err.message);
+//     return res.status(500).json({ error: err.message });
+//   }
+// });
 app.post('/createLoan', async function (req, res) {
-  const { id, lender, borrower, amount, durationDays, interestRate, contractImage } = req.body;
-  const args = [id, lender, borrower, amount, durationDays, interestRate];
+  const { id, lender, borrower, amount, durationDays, interestRate } = req.body;
+  // └─ lender, borrower: “프로필”이 아니라 지갑 주소(예: 'wallet_xyz')라고 가정
+  console.log('[createLoan] 호출됨 → body:', JSON.stringify(req.body));
 
   try {
-    const txId = await sdk.send(false, 'CreateLoanRequest', args); // txId 반환됨
+    // 1) 체인코드에 대출 요청
+    const txId = await sdk.send(false, 'CreateLoanRequest', [id, lender, borrower, amount, durationDays, interestRate]);
 
-    // 체인 호출 성공 → Supabase에 해시 정보만 저장
-    const { error } = await supabase.from('loans').insert([{
-      id: id,                    // 체인에 저장한 loan ID를 그대로 사용
-      loan_chain_id: id,         // 체인에 저장한 loan ID
-      tx_hash: txId,             // 블록체인 트랜잭션 ID
-      created_at: getKoreanTime() // 한국 시간으로 저장
-    }]);
+    // 2) 지갑 주소 → profiles.id(UUID) 매핑 (Supabase에서 조회)
+    //    - lender(지갑 주소)로 lender_id(UUID) 조회
+    const { data: lenderProfile, error: lenderError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('wallet_id', lender)
+      .single();
+    if (lenderError || !lenderProfile) {
+      console.error('[createLoan] lender 프로필 조회 실패:', lenderError);
+      return res.status(400).json({ error: '대출자 프로필을 찾을 수 없습니다.' });
+    }
+    const lenderId = lenderProfile.id;
+
+    //    - borrower(지갑 주소)로 borrower_id(UUID) 조회
+    const { data: borrowerProfile, error: borrowerError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('wallet_id', borrower)
+      .single();
+    if (borrowerError || !borrowerProfile) {
+      console.error('[createLoan] borrower 프로필 조회 실패:', borrowerError);
+      return res.status(400).json({ error: '차입자 프로필을 찾을 수 없습니다.' });
+    }
+    const borrowerId = borrowerProfile.id;
+
+    // 3) 이제 loans 테이블에 신규 레코드 삽입
+    const now = getKoreanTime(); // ISO 포맷(UTC+9) 문자열
+    const { error } = await supabase
+      .from('loans')
+      .insert([{
+        id:             id,              // 로컬 PK
+        loan_chain_id:  id,              // 체인에서도 같은 ID 사용
+        tx_hash:        txId,            // 체인 트랜잭션 해시
+        lender_id:      lenderId,        // profiles.id(UUID)
+        borrower_id:    borrowerId,      // profiles.id(UUID)
+        amount:         Number(amount),  // 숫자로 저장
+        interest_rate:  Number(interestRate),
+        duration_days:  Number(durationDays),
+        status:         'pending',       // 최초 생성 시점엔 대출 승인 전이므로 ‘pending’
+        created_at:     now
+        // start_time, due_date, repaid_at, contract_hash, updated_at 은 나중에 승인/상환 시점에 채움
+      }]);
 
     if (error) {
-      console.error('❌ DB 저장 실패:', error);
-      return res.status(500).json({ error: 'DB 저장 실패' });
+      console.error('[createLoan] DB 저장 실패:', error);
+      return res.status(500).json({ error: 'DB 저장 실패', detail: error.message });
     }
 
-    return res.json({ 
-      message: 'Loan created on chain and DB', 
+    return res.json({
+      message: 'Loan created on chain and DB',
       txId
     });
 
   } catch (err) {
-    console.error('❌ 체인 오류:', err.message);
+    console.error('[createLoan] 체인 오류:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 // 대출 승인
 // GET /approveLoan?id=<loanId>
@@ -303,120 +371,94 @@ app.get('/approveLoan', async (req, res) => {
   }
 
   try {
-    console.log('[ /approveLoan ] 1) 체인코드 호출 → ApproveLoanRequest(', loanId, ')');
-    // 체인코드에 대출 승인 요청 (이때에만 지갑 간 잔액 이동 트랜잭션이 발생)
+    // 1) 체인코드에 대출 승인 요청
     const approveResult = await sdk.send(false, 'ApproveLoanRequest', [loanId]);
-    console.log('✅ ApproveLoanRequest 성공, 체인 응답 →', approveResult);
 
-    // 승인된 뒤 바로 체인코드에서 loanInfo를 조회
-    console.log('[ /approveLoan ] 2) 체인코드 호출 → QueryLoanRequest(', loanId, ')');
+    // 2) 승인 직후 체인에서 상세 정보 조회
     const loanInfo = await sdk.send(true, 'QueryLoanRequest', [loanId]);
-    console.log('[ /approveLoan ] 2) 조회된 loanInfo →', loanInfo);
-    // 예: loanInfo = {
-    //   id: 'de7b8144-0eed-4552-9e19-58abc32b653f',
-    //   lender: 'wallet_07187a3f_1748701343119',
-    //   borrower: 'wallet_7ebeda91_1748701365403',
-    //   amount: 1000000,
-    //   durationDays: 360,
-    //   interestRate: 5,
-    //   status: 'Active',
-    //   startTime: 1748701385,
-    //   endTime: 1779805385,
-    //   poolId: ''
-    // }
+    const {
+      lender: lenderWalletAddr,
+      borrower: borrowerWalletAddr,
+      amount: chainAmount,
+      interestRate: chainRate,
+      durationDays: chainDays,
+      status: chainStatusRaw,
+      startTime: startTsSec,
+      endTime:   endTsSec
+    } = typeof loanInfo === 'string' ? JSON.parse(loanInfo) : loanInfo;
 
-    const { lender: lenderWalletAddr, borrower: borrowerWalletAddr, amount } = loanInfo;
-    console.log('[ /approveLoan ] 2) 파싱된 lender/borrower/amount →', {
-      lenderWalletAddr,
-      borrowerWalletAddr,
-      amount,
-    });
+    const amount     = Number(chainAmount);
+    const rate       = Number(chainRate);
+    const days       = Number(chainDays);
+    const chainStatus= chainStatusRaw.toLowerCase();           // 'active'
+    const startTimeISO= new Date(Number(startTsSec) * 1000).toISOString();
+    const dueDateISO  = new Date(Number(endTsSec)   * 1000).toISOString();
 
-    // ───────────────────────────────────────────────────────────────────────────
-    // 3) "지갑 주소 → profiles.id(UUID)" 매핑
-    //    profiles 테이블에서 wallet_id 칼럼이 실제 지갑 주소(예: 'wallet_07187a3f_...')로 저장되어 있다고 가정
-    // ───────────────────────────────────────────────────────────────────────────
-    // 3-1) lender 프로필 조회
-    const { data: lenderProfile, error: lenderError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('wallet_id', lenderWalletAddr)
-      .single();
-
-    if (lenderError) {
-      console.error('[ /approveLoan ] lender 프로필 조회 실패 →', lenderError);
-      return res.status(500).json({ error: '대출자 프로필 조회 실패', detail: lenderError.message });
+    // 3) 지갑 주소 → profiles.id(UUID) 매핑
+    const { data: lp, error: le } = await supabase
+      .from('profiles').select('id').eq('wallet_id', lenderWalletAddr).single();
+    if (le || !lp) {
+      return res.status(404).json({ error: '대출자 프로필을 찾을 수 없습니다: ' + lenderWalletAddr });
     }
-    if (!lenderProfile) {
-      console.error('[ /approveLoan ] 대출자 프로필을 찾을 수 없음 →', lenderWalletAddr);
-      return res.status(404).json({ error: `lender 프로필이 존재하지 않습니다: ${lenderWalletAddr}` });
-    }
-    const lenderUserId = lenderProfile.id; // 실제 UUID
-    console.log('[ /approveLoan ] 3-1) lenderUserId (UUID) →', lenderUserId);
+    const lenderId   = lp.id;
 
-    // 3-2) borrower 프로필 조회
-    const { data: borrowerProfile, error: borrowerError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('wallet_id', borrowerWalletAddr)
-      .single();
-
-    if (borrowerError) {
-      console.error('[ /approveLoan ] borrower 프로필 조회 실패 →', borrowerError);
-      return res.status(500).json({ error: '차입자 프로필 조회 실패', detail: borrowerError.message });
+    const { data: bp, error: be } = await supabase
+      .from('profiles').select('id').eq('wallet_id', borrowerWalletAddr).single();
+    if (be || !bp) {
+      return res.status(404).json({ error: '차입자 프로필을 찾을 수 없습니다: ' + borrowerWalletAddr });
     }
-    if (!borrowerProfile) {
-      console.error('[ /approveLoan ] 차입자 프로필을 찾을 수 없음 →', borrowerWalletAddr);
-      return res.status(404).json({ error: `borrower 프로필이 존재하지 않습니다: ${borrowerWalletAddr}` });
-    }
-    const borrowerUserId = borrowerProfile.id;
-    console.log('[ /approveLoan ] 3-2) borrowerUserId (UUID) →', borrowerUserId);
+    const borrowerId = bp.id;
 
-    // ───────────────────────────────────────────────────────────────────────────
-    // 4) wallet_transactions 테이블에 "loan_sent"(대출자 출금) & "loan_received"(차입자 입금) 기록
-    // ───────────────────────────────────────────────────────────────────────────
+    // 4) loans 테이블 UPDATE → start_time, due_date, status, updated_at 채우기
+    const { error: updateError } = await supabase
+      .from('loans')
+      .update({
+        lender_id:     lenderId,
+        borrower_id:   borrowerId,
+        amount:        amount,
+        interest_rate: rate,
+        duration_days: days,
+        status:        chainStatus,   // 'active' 등으로 변경
+        start_time:    startTimeISO,
+        due_date:      dueDateISO,
+        updated_at:    new Date().toISOString()
+      })
+      .eq('loan_chain_id', loanId);
+    if (updateError) {
+      return res.status(500).json({ error: 'DB 업데이트 실패', detail: updateError.message });
+    }
+
+    // 5) wallet_transactions에 “loan_sent” & “loan_received” 기록
     const txOut = {
-      user_id: lenderUserId,         // 이제 "프로필 UUID"를 넣어야 함
-      type: 'loan_sent',
-      amount: -Math.abs(amount),     // 출금 금액은 음수
-      related_user_id: borrowerUserId,
-      loan_id: loanId,
-      memo: '친구 대출 승인 - 출금',
-      // created_at: 생략하면 default now()가 자동으로 들어갑니다.
+      user_id:        lenderId,
+      type:           'loan_sent',
+      amount:        -Math.abs(amount),
+      related_user_id: borrowerId,
+      loan_id:        loanId,
+      memo:           '친구 대출 승인 - 출금'
     };
     const txIn = {
-      user_id: borrowerUserId,
-      type: 'loan_received',
-      amount: Math.abs(amount),      // 입금은 양수
-      related_user_id: lenderUserId,
-      loan_id: loanId,
-      memo: '친구 대출 승인 - 입금',
+      user_id:        borrowerId,
+      type:           'loan_received',
+      amount:         Math.abs(amount),
+      related_user_id: lenderId,
+      loan_id:        loanId,
+      memo:           '친구 대출 승인 - 입금'
     };
-
-    console.log('[ /approveLoan ] 4) Supabase 에 INSERT할 txOut →', txOut);
-    console.log('[ /approveLoan ] 4) Supabase 에 INSERT할 txIn →', txIn);
-
-    const { data: txData, error: txError } = await supabase
+    const { error: txError } = await supabase
       .from('wallet_transactions')
-      .insert([txOut, txIn]);
-
+      .insert([ txOut, txIn ]);
     if (txError) {
-      console.error('[ /approveLoan ] Supabase INSERT 실패 →', txError);
       return res.status(500).json({ error: 'wallet_transactions 기록 실패', detail: txError.message });
     }
 
-    console.log('[ /approveLoan ] 4) Supabase INSERT 결과 →', txData);
-
-    // 최종 응답
     return res.json({
-      success: true,
-      message: '대출 승인 완료 (체인+DB 기록됨)',
-      chainResult: approveResult,
-      transactions: txData,
+      success:     true,
+      message:     '대출 승인 완료 (체인+DB 기록됨)',
+      chainResult: approveResult
     });
-
   } catch (err) {
-    console.error('[ /approveLoan ] 🚨 에러 발생 →', err);
+    console.error('[approveLoan] 에러 발생 →', err);
     return res.status(500).json({ error: err.message });
   }
 });

@@ -263,9 +263,9 @@ export default function FriendLoanRequest() {
       };
 
       setLoanAgreementData({
-        loanData,
-        selectedFriend,
-        estimatedRepaymentDate,
+        loanData: loanData,
+        selectedFriend: selectedFriend,
+        estimatedRepaymentDate: formattedEndDate,        // “YYYY. M. D.” 또는 “yyyy년 M월 d일”
         totalRepayment: calculateTotalRepayment(),
         startDate: formattedToday,
         endDate: formattedEndDate
