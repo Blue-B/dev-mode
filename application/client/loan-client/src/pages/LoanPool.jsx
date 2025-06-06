@@ -40,7 +40,7 @@ const LoanPool = () => {
         id,
         name: poolName,
         minDeposit: parseInt(minDeposit),
-        interestRate: parseInt(interestRate),
+        interestRate: parseFloat(interestRate),
         durationMonths: parseInt(duration),
         creatorAddress: profile.wallet_id,
         initialDeposit: parseInt(initialDeposit)

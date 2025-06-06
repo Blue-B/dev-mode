@@ -817,7 +817,7 @@ app.post('/createPool', async (req, res) => {
       id,
       name,
       min_deposit: parseInt(minDeposit),
-      interest_rate: parseInt(interestRate),
+      interest_rate: parseFloat(interestRate),
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       status: 'open',

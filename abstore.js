@@ -116,10 +116,10 @@ const LoanShim = class {
     const borrower = args[2];
     const amount = parseInt(args[3], 10);
     const durationDays = parseInt(args[4], 10);
-    const interestRate = parseInt(args[5], 10);
+    const interestRate = parseFloat(args[5], 10);
 
     if (isNaN(amount) || isNaN(durationDays) || isNaN(interestRate)) {
-      throw new Error('Amount, durationDays, interestRate must be integers');
+      throw new Error('Amount, durationDays, interestRate must be numbers');
     }
 
     // 중복 대출 요청 ID 확인
@@ -397,7 +397,7 @@ const LoanShim = class {
     const id = args[0];
     const name = args[1];
     const minDeposit = parseInt(args[2], 10);
-    const interestRate = parseInt(args[3], 10);
+    const interestRate = parseFloat(args[3], 10);
     const durationMonths = parseInt(args[4], 10);
 
     if (isNaN(minDeposit) || isNaN(interestRate) || isNaN(durationMonths)) {
