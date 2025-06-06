@@ -269,7 +269,7 @@ const LoanPool = () => {
     return filtered;
   };
 
-  const renderPoolCard = (당구) => {
+  const renderPoolCard = (pool) => {
     const isJoined = hasJoinedPool(pool.id);
     const isOpen = pool.status === 'Open' || pool.status === 'open';
     const isJoiningThis = joiningPoolId === pool.id;
