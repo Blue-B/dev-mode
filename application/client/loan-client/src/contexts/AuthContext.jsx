@@ -2,10 +2,23 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { createWallet } from '../services/api'; 
 
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
+// Supabase 클라이언트 초기화
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Supabase 환경변수가 설정되지 않았습니다!');
+  console.log('URL:', supabaseUrl);
+  console.log('Key:', supabaseAnonKey);
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
 
 const AuthContext = createContext({});
 
@@ -41,7 +54,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-   // user가 로그인되면 wallet 존재 여부 확인 후 생성
+  // user가 로그인되면 wallet 존재 여부 확인 후 생성
   useEffect(() => {
     const ensureWallet = async () => {
       if (!user?.id) return;
@@ -69,24 +82,75 @@ export const AuthProvider = ({ children }) => {
     };
 
     ensureWallet();
-  }, [user?.id]); // user가 바뀔 때마다 실행됨
+  }, [user?.id]);
 
   const value = {
     user,
     loading,
-    signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
-    signUp: (email, password) => supabase.auth.signUp({ email, password }),
-    signOut: () => supabase.auth.signOut(),
-    signInWithGoogle: () => supabase.auth.signInWithOAuth({ 
-      provider: 'google',
-      options: {
-        redirectTo: 'http://localhost:8001/signup',  // 서버 포트로 변경
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    }),
+    signIn: async (email, password) => {
+      try {
+        console.log('이메일 로그인 시도:', email);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          console.error('로그인 에러:', error);
+          throw error;
+        }
+        console.log('로그인 성공:', data);
+        return { data, error: null };
+      } catch (error) {
+        console.error('로그인 처리 중 에러:', error);
+        return { data: null, error };
+      }
+    },
+    signUp: async (email, password) => {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password
+        });
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('회원가입 에러:', error);
+        return { data: null, error };
+      }
+    },
+    signOut: async () => {
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      } catch (error) {
+        console.error('로그아웃 에러:', error);
+        throw error;
+      }
+    },
+    signInWithGoogle: async () => {
+      try {
+        console.log('구글 로그인 시도...');
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: process.env.REACT_APP_REDIRECT_URL || window.location.origin + '/signup',
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+        if (error) {
+          console.error('구글 로그인 에러:', error);
+          throw error;
+        }
+        console.log('구글 로그인 응답:', data);
+        return { data, error: null };
+      } catch (error) {
+        console.error('구글 로그인 처리 중 에러:', error);
+        return { data: null, error };
+      }
+    },
   };
 
   return (
