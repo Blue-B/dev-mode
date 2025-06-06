@@ -2,6 +2,7 @@
 
 'use strict';
 const cors = require('cors');
+const cron  = require('node-cron');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 const axios = require('axios');
@@ -442,11 +443,6 @@ async function queryLoan(id) {
 }
 
 // 대출 상환
-// app.get('/repayLoan', function (req, res) {
-//     let { id } = req.query;
-//     let args = [id];
-//     sdk.send(false, 'RepayLoan', args, res);
-// });
 app.post('/loan/repay', async (req, res) => {
   const { loanId } = req.body;
   console.log('[RepayLoan] 상환 요청 도착 → loanId:', loanId);
@@ -550,6 +546,97 @@ app.get('/myLoans', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// ===================
+// 매일 자정 연체 확인 → Defaulted + 신용점수 차감
+// ===================
+async function processOverdueLoans() {
+  // 1) 현재 시각(ISO) 구하기
+  const now = new Date();
+  const nowISO = now.toISOString();
+
+  // 2) status='active' AND due_date < now 인 대출들 조회
+  const { data: overdueLoans, error: selectError } = await supabase
+    .from('loans')
+    .select('id, borrower_id, due_date')
+    .eq('status', 'active')
+    .lt('due_date', nowISO);
+
+  if (selectError) {
+    console.error('[processOverdueLoans] 연체 대출 조회 실패:', selectError);
+    return;
+  }
+  if (!overdueLoans || overdueLoans.length === 0) {
+    console.log('[processOverdueLoans] 연체 대상 대출 없음');
+    return;
+  }
+
+  // 3) 연체된 각 loan에 대해 처리
+  for (const row of overdueLoans) {
+    const loanId     = row.id;
+    const borrowerId = row.borrower_id;
+    const dueDate    = new Date(row.due_date);
+    const diffMs     = now.getTime() - dueDate.getTime();
+    const overdueDays= Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // 4) 연체 일수별 페널티 계산
+    let penalty = 0;
+    if (overdueDays >= 1 && overdueDays <= 3)        penalty = 50;
+    else if (overdueDays >= 4 && overdueDays <= 7)   penalty = 100;
+    else if (overdueDays >= 8 && overdueDays <= 14)  penalty = 200;
+    else if (overdueDays >= 15 && overdueDays <= 30) penalty = 300;
+    else if (overdueDays >= 31)                      penalty = 500;
+
+    // 5) loans 테이블 status 업데이트
+    const { error: updateLoanError } = await supabase
+      .from('loans')
+      .update({
+        status: 'defaulted',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loanId);
+
+    if (updateLoanError) {
+      console.error(`[processOverdueLoans] loan ${loanId} 상태 업데이트 실패:`, updateLoanError);
+      // 다음 루프로 넘어갑니다
+      continue;
+    }
+
+    // 6) profiles 테이블의 credit_score 차감 (0 미만이면 0으로)
+    //    - 우선 현재 credit_score을 읽어서 계산하거나, GREATEST 함수를 쓰고 싶으면 RPC를 써야 하지만
+    //      Supabase JS에서 GREATEST를 직접 쓰기 어렵습니다. → 한 번 읽어서 계산 후 업데이트
+    const { data: profileRow, error: profSelectError } = await supabase
+      .from('profiles')
+      .select('credit_score')
+      .eq('id', borrowerId)
+      .single();
+
+    if (profSelectError || !profileRow) {
+      console.error(`[processOverdueLoans] borrower(${borrowerId}) 정보 조회 실패:`, profSelectError);
+      continue;
+    }
+
+    const newScore = Math.max(0, (profileRow.credit_score || 0) - penalty);
+    const { error: updateProfileError } = await supabase
+      .from('profiles')
+      .update({
+        credit_score: newScore,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', borrowerId);
+
+    if (updateProfileError) {
+      console.error(`[processOverdueLoans] borrower(${borrowerId}) 신용점수 업데이트 실패:`, updateProfileError);
+      continue;
+    }
+
+    console.info(
+      `Loan(${loanId}) 연체(${overdueDays}일): status→defaulted, borrower=${borrowerId}, penalty=${penalty}점 차감 (새점수=${newScore})`
+    );
+  }
+}
+
 
 // ================= 대출풀 시스템 API ==================
 
@@ -999,6 +1086,31 @@ app.listen(PORT, HOST, async () => {
   console.log(`서버 시작중 => http://${HOST}:${PORT}/`);
   // 서버 시작 직후 동기화 실행
   await syncWalletsToChaincode();
+
+  // 서버 시작 부분 바로 뒤(예: app.listen(...) 위나 아래 어느 곳이든)
+  // “0 0 * * *” 은 매일 자정(00:00)에 실행하라는 의미(서버 시간 기준)
+  // cron.schedule('0 0 * * *', () => {
+  //   console.log('🔔 [cron] 매일 자정 연체 처리 시작 →', new Date().toISOString());
+  //   processOverdueLoans().catch(err => {
+  //     console.error('[cron] processOverdueLoans 중 오류 발생:', err);
+  //   });
+  // }, {
+  //   timezone: 'Asia/Seoul'  // (한국 시각 자정에 실행하려면 timezone 옵션 추가)
+  // });
+  // console.log('✅ 매일 자정 연체 확인(cron)이 예약되었습니다.');
+
+  // 1분마다 실행 (테스트용)
+  cron.schedule('* * * * *', () => {
+    console.log('🔔 [cron 테스트] 1분마다 연체 처리 시작 →', new Date().toISOString());
+    processOverdueLoans().catch(err => {
+      console.error('[cron 테스트] processOverdueLoans 중 오류 발생:', err);
+    });
+  }, {
+    timezone: 'Asia/Seoul'
+  });
+    console.log('✅ 1분마다 실행 (테스트용) 연체 확인(cron)이 예약되었습니다.');
+
+
 });
 
 // ================= 친구 API ==================
@@ -1307,12 +1419,6 @@ app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
   }
 });
 
-
-// 마지막에만 index.html 반환 (SPA 대응용)
-app.get('*', function (req, res) {
-  res.sendFile(path.join(clientPath, 'index.html'));
-});
-
 // 계약서 해시 생성 함수
 async function generateContractHash(contractImage) {
   return new Promise((resolve, reject) => {
@@ -1400,3 +1506,4 @@ app.post('/api/contract/save', async (req, res) => {
 app.get('*', function (req, res) {
   res.sendFile(path.join(clientPath, 'index.html'));
 });
+
