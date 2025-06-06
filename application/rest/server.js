@@ -1552,7 +1552,7 @@ app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
     const { data, error } = await supabase
       .from('wallet_transactions')
       .select('id, type, amount, loan_id, related_user_id, created_at')
-      .or(`user_id.eq.${userId},related_user_id.eq.${userId}`)
+      .or(`user_id.eq.${userId}`)
       .in('type', ['loan_sent', 'loan_received'])
       .order('created_at', { ascending: false });
 
@@ -1564,6 +1564,30 @@ app.post('/myLoanTransactions', authenticateUser, async (req, res) => {
     res.status(500).json({ error: '대출 기록 조회 실패' });
   }
 });
+// POST /getLoanMeta 이자율 상환기간 조회회
+app.post('/getLoanMeta', async (req, res) => {
+  const { loanId } = req.body;
+  if (!loanId) return res.status(400).json({ error: 'loanId가 필요합니다.' });
+
+  try {
+    const { data, error } = await supabase
+      .from('loans')
+      .select('interest_rate, duration_days')
+      .eq('id', loanId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'loan 정보가 없습니다.' });
+    }
+
+    return res.json(data); // { interest_rate: ..., duration_days: ... }
+  } catch (err) {
+    console.error('loan meta 조회 실패:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= 계약서 해시 생성 및 검증 ==================
 
 // 계약서 해시 생성 함수
 async function generateContractHash(contractImage) {

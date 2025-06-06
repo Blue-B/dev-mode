@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { GiftIcon, CircleStackIcon } from '@heroicons/react/24/solid';
-import { getMyLoanTransactions, getCurrentUser, getUserProfile ,getNameById } from '../services/api';
+import { getMyLoanTransactions, getCurrentUser, getUserProfile ,getNameById, getLoanMeta } from '../services/api';
 
 const FinancialStatus = () => {
   const [loans, setLoans] = useState([]);
@@ -51,12 +51,25 @@ useEffect(() => {
               console.warn('이름 불러오기 실패:', counterpartyId);
             }
           }
+          let rate = '5%'; // 기본값
+          let period = '365일'; // 기본값
+
+          if (tx.loan_id) {
+            try {
+              const meta = await getLoanMeta(tx.loan_id);
+              rate = meta.interest_rate ? `${meta.interest_rate}%` : rate;
+              period = meta.duration_days ? `${meta.duration_days}일` : period;
+            } catch (e) {
+              console.warn('loan meta 조회 실패:', tx.loan_id);
+            }
+          }
+
 
           return {
             amount: `${amountNum.toLocaleString()} KRW`,
             amountNum,
-            rate: tx.rate ? `${tx.rate}%` : '5%',
-            period: tx.period || '12개월',
+            rate: rate,
+            period: period,
             start: new Date(tx.created_at).toISOString().split('T')[0],
             timestamp: new Date(tx.created_at).getTime(),
             status: tx.status || '활성',
