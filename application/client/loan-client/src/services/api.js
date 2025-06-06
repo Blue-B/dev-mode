@@ -431,3 +431,13 @@ export const getNameById = async (userId) => {
   }
 };
 
+// 이자율 상환기간 조회
+export const getLoanMeta = async (loanId) => {
+  try {
+    const res = await api.post('/getLoanMeta', { loanId });
+    return res.data; // { interest_rate, duration_days }
+  } catch (error) {
+    console.error('[❌ getLoanMeta 실패]', error.response?.data || error.message);
+    throw error;
+  }
+};
