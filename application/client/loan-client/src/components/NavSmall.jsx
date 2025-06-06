@@ -10,35 +10,22 @@ import {
 } from "@heroicons/react/24/solid";
 import { NavLink, useNavigate } from "react-router-dom";
 import avatar from "../assets/avatar.png";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
+import { useAuth } from "../contexts/AuthContext";
 
 const NavSmall = ({ isVisible, onClose }) => {
   const [userEmail, setUserEmail] = useState("");
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
-    const fetchUserEmail = async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) throw error;
-        setUserEmail(data.user.email);
-      } catch (error) {
-        console.error("사용자 이메일을 가져오는 중 오류 발생:", error);
-      }
-    };
-
-    fetchUserEmail();
-  }, []);
+    if (user?.email) {
+      setUserEmail(user.email);
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await signOut();
       window.location.reload(); // 새로고침하여 창 새로 띄우는 느낌 제공
     } catch (error) {
       console.error("로그아웃 에러:", error);

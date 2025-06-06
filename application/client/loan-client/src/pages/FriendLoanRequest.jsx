@@ -12,6 +12,7 @@ import LoanAgreement from "./contract/LoanAgreement";
 import { differenceInDays } from 'date-fns';
 import 'react-toastify/dist/ReactToastify.css';
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import defaultAvatar from '../assets/avatar.png';
 
 export default function FriendLoanRequest() {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ export default function FriendLoanRequest() {
   const [friends, setFriends] = useState([]);
   const [userWalletAddress, setUserWalletAddress] = useState('');
   const [loanAgreementData, setLoanAgreementData] = useState(null);
-
+  const [borrowerProfile, setBorrowerProfile] = useState(null);
   
   useEffect(() => {
     const fetchUserWallet = async () => {
@@ -40,6 +41,7 @@ export default function FriendLoanRequest() {
 
         try {
             const profile = await getUserProfile(user.id);
+            setBorrowerProfile(profile);
             setBorrowerName(profile?.name || '나'); // 이름 설정
             setUserWalletAddress(profile.wallet_id);
         
@@ -111,7 +113,7 @@ export default function FriendLoanRequest() {
     }, interval);
   };
   
-  // 오늘 기준으로 “n개월 뒤” 계산한 문자열 (UI에 표시할 때도 사용 가능)
+  // 오늘 기준으로 "n개월 뒤" 계산한 문자열 (UI에 표시할 때도 사용 가능)
   useEffect(() => {
       if (loanTermMonths > 0) {
         // date-fns의 addMonths 사용 → 말일/윤달을 올바르게 처리
@@ -125,13 +127,9 @@ export default function FriendLoanRequest() {
       }
     }, [loanTermMonths, currentDate]);
 
-  const selectAmount = (amount) => {
-    setLoanAmount(amount.toLocaleString());
-  };
-
   const handleLoanAmountChange = (e) => {
-    const value = e.target.value;
-    const numberValue = parseInt(value.replace(/,/g, ""), 10);
+    const value = e.target.value.replace(/,/g, ""); // 먼저 모든 콤마 제거
+    const numberValue = parseInt(value, 10);
 
     if (!value || isNaN(numberValue)) {
       setLoanAmount("");
@@ -145,9 +143,18 @@ export default function FriendLoanRequest() {
       setLoanAmountError("");
     }
 
-    setLoanAmount(value);
+    // 천자리 구분기호 추가
+    setLoanAmount(numberValue.toLocaleString());
   };
 
+  const selectAmount = (amount) => {
+    if (amount < 10000) {
+      setLoanAmountError("최소 대출 금액은 10,000원 이상이어야 합니다.");
+      return;
+    }
+    setLoanAmountError("");
+    setLoanAmount(amount.toLocaleString());
+  };
 
   const selectTerm = (term) => {
     setLoanTermMonths(term);
@@ -263,9 +270,10 @@ export default function FriendLoanRequest() {
       };
 
       setLoanAgreementData({
-        loanData,
-        selectedFriend,
-        estimatedRepaymentDate,
+        loanData: loanData,
+        selectedFriend: selectedFriend,
+        borrowerProfile,     
+        estimatedRepaymentDate: formattedEndDate,        // "YYYY. M. D." 또는 "yyyy년 M월 d일"
         totalRepayment: calculateTotalRepayment(),
         startDate: formattedToday,
         endDate: formattedEndDate
@@ -678,33 +686,6 @@ export default function FriendLoanRequest() {
                      </div>
                  </div>
 
-                {/* Favorites Section */}
-                <div className="mb-6">
-                    <div className="flex items-center mb-4 text-gray-700">
-                         <svg className="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.83-.197-1.54-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z" />
-                         </svg>
-                        <span className="font-semibold">즐겨찾기</span>
-                    </div>
-                    {/* Friend list items */}
-                     <div className="grid grid-cols-3 gap-4">
-                         {/* Filter and map favorite friends */}
-                         {friends.filter(friend => friend.isFavorite).map(friend => (
-                             <div key={friend.id} className="flex flex-col items-center p-4 text-center rounded-lg bg-gray-50">
-                                 <img src={friend.avatar} alt="Friend Avatar" className="w-12 h-12 mb-2 rounded-full"/>
-                                 <span className="text-sm font-medium text-gray-800">{friend.name}</span>
-                                 <span className="mb-3 text-xs text-gray-500">{friend.phone}</span>
-                                 <button
-                                   className={`text-xs py-1 px-3 rounded-full ${friend.isSelected ? 'bg-blue-500 text-white' : 'bg-white text-blue-500 border border-blue-300'}`}
-                                   onClick={() => handleFriendSelect(friend.id)}
-                                 >
-                                   {friend.isSelected ? '✓ 선택' : '○ 선택'}
-                                 </button>
-                             </div>
-                         ))}
-                     </div>
-                </div>
-
                 {/* My Friends Section */}
                 <div>
                     <div className="flex items-center mb-4 text-gray-700">
@@ -715,12 +696,11 @@ export default function FriendLoanRequest() {
                          <span className="text-sm text-gray-500">(총 {friends.length}명)</span>
                     </div>
                     {/* Friend list items */}
-                    {/* Add max-height and overflow-y-auto for scrolling. Adjusted max-height calculation. */}
-                     <div className="pr-2 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 480px)' }}> {/* Adjusted max-height */}
-                         {/* Filter and map all friends for the main list based on search query */}
+                    <div className="pr-2 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 480px)' }}>
+                         {/* Display message if no friends found */}
                          {friends.filter(friend => friend.name.includes(searchQuery) || friend.phone.includes(searchQuery)).map(friend => (
                              <div key={friend.id} className="flex items-center p-4 rounded-lg bg-gray-50">
-                                  <img src={friend.avatar} alt="Friend Avatar" className="w-10 h-10 mr-4 rounded-full"/>
+                                  <img src={defaultAvatar} alt={friend.name} className="w-10 h-10 mr-4 rounded-full"/>
                                   <div className="flex-1">
                                        <div className="font-medium text-gray-800">{friend.name}</div>
                                        <div className="text-sm text-gray-500">{friend.phone}</div>
@@ -739,7 +719,6 @@ export default function FriendLoanRequest() {
                           )}
                      </div>
                 </div>
-
              </div>
         )}
 
@@ -747,6 +726,7 @@ export default function FriendLoanRequest() {
           <LoanAgreement
             loanData={loanAgreementData.loanData}
             selectedFriend={loanAgreementData.selectedFriend}
+            borrowerProfile={borrowerProfile}
             estimatedRepaymentDate={loanAgreementData.estimatedRepaymentDate}
             totalRepayment={loanAgreementData.totalRepayment}
             startDate={loanAgreementData.startDate}
@@ -755,7 +735,6 @@ export default function FriendLoanRequest() {
             goToNextStep={() => setCurrentStep(4)}
           />
         )}
-
 
         {/* Step 4: Request Submission (Placeholder) */}
         {currentStep === 4 && (
@@ -815,7 +794,6 @@ export default function FriendLoanRequest() {
                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                  </svg>
                </button>
-               
              </>
           )}
            {currentStep === 2 && (
@@ -823,10 +801,7 @@ export default function FriendLoanRequest() {
                <button className="flex-1 py-4 font-semibold text-gray-700 transition-colors bg-gray-100 rounded-xl hover:bg-gray-200">
                  임시저장
                </button>
-                <div className="flex items-center mr-4 text-sm text-gray-600">
-                    선택된 친구: {selectedFriend ? selectedFriend.name : '없음'}
-                </div>
-              <button
+                <button
                  className="flex items-center justify-center flex-1 px-6 py-4 font-semibold text-white transition-colors bg-blue-500 rounded-xl hover:bg-blue-600"
                  onClick={handleCreateLoan}
                  disabled={!selectedFriend}
@@ -840,8 +815,10 @@ export default function FriendLoanRequest() {
            )}
            {currentStep === 4 && (
              <>
-               <button className="flex items-center justify-center flex-1 py-4 font-semibold text-blue-600 transition-colors bg-blue-50 rounded-xl hover:bg-blue-100">
-                 <Wallet className="w-5 h-5 mr-2"/>내 대출 관리
+               <button 
+                 onClick={() => navigate('/financialstatus')}
+                 className="flex items-center justify-center flex-1 py-4 font-semibold text-blue-600 transition-colors bg-blue-50 rounded-xl hover:bg-blue-100">
+                 <Wallet className="w-5 h-5 mr-2"/>자금현황
                </button>
                <button 
                  onClick={() => navigate('/dashboard')}

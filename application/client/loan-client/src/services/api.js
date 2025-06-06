@@ -379,14 +379,33 @@ export const downloadAndSaveContract = async (loanId, contractImage) => {
       throw new Error('계약서 이미지가 필요합니다.');
     }
 
-    // 1. 계약서 해시 저장
+    // 1) 계약서 해시 저장 (서버 측 로직)
     const saveResult = await saveContract(loanId, contractImage);
     if (!saveResult.success) {
       throw new Error('계약서 해시 저장에 실패했습니다.');
     }
-    
-    // 2. 계약서 다운로드 링크 생성
-    const blob = new Blob([contractImage], { type: 'image/png' });
+
+    // -------------------------------------------------
+    // 2) Base64 Data URL → Blob 변환 (fetch 사용하지 않음)
+    // -------------------------------------------------
+    // dataURLToBlob 함수 정의(위 설명 참조)
+    function dataURLToBlob(dataUrl) {
+      const [header, base64Data] = dataUrl.split(',');
+      const binaryString = atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: 'image/png' });
+    }
+
+    // contractImage가 "data:image/png;base64,..." 형태라고 가정
+    const blob = dataURLToBlob(contractImage);
+
+    // -------------------------------------------------
+    // 3) Blob을 브라우저에서 다운로드
+    // -------------------------------------------------
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -395,14 +414,49 @@ export const downloadAndSaveContract = async (loanId, contractImage) => {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-    
-    return { 
+
+    return {
       success: true,
       contractHash: saveResult.contractHash,
       message: '계약서가 다운로드되었습니다.'
     };
   } catch (error) {
     console.error('계약서 다운로드 및 저장 실패:', error);
+    throw error;
+  }
+};
+
+
+// 내 대출 거래 기록 조회
+export const getMyLoanTransactions = async (userId) => {
+  try {
+    const response = await api.post('/myLoanTransactions', { userId }); // ✅ POST로 변경
+    return response.data.data;
+  } catch (error) {
+    console.error('내 대출 거래 기록 조회 실패:', error);
+    throw error;
+  }
+};
+
+// 유저 이름 조회
+export const getNameById = async (userId) => {
+  try {
+    const res = await api.post('/getName', { userId });
+    console.log('[✅ getNameById 응답]', res.data);
+    return res.data;
+  } catch (err) {
+    console.error('[❌ getNameById 실패]', err.response?.data || err.message);
+    throw err;
+  }
+};
+
+// 이자율 상환기간 조회
+export const getLoanMeta = async (loanId) => {
+  try {
+    const res = await api.post('/getLoanMeta', { loanId });
+    return res.data; // { interest_rate, duration_days }
+  } catch (error) {
+    console.error('[❌ getLoanMeta 실패]', error.response?.data || error.message);
     throw error;
   }
 };

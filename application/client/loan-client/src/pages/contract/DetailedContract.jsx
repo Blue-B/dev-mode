@@ -3,7 +3,9 @@ import { X, Download } from "lucide-react";
 import html2canvas from "html2canvas";
 
 // Detailed Contract Component
-export default function DetailedContract({ contractData, onClose, signatures }) {
+export default function DetailedContract({ contractData, onClose, signatures,
+    showActions = true  // ★ 기본값을 true로 두고, off‐screen 캡처할 때 false로 넘겨줄 예정
+ }) {
   const contractRef = useRef(null);
 
   const handleDownload = async () => {
@@ -34,28 +36,32 @@ export default function DetailedContract({ contractData, onClose, signatures }) 
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header with actions */}
-      <div className="sticky top-0 z-10 bg-white border-b">
-        <div className="flex items-center justify-between max-w-4xl px-8 py-4 mx-auto">
-          <h1 className="text-xl font-bold">대출 계약서</h1>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-colors bg-blue-500 rounded-lg hover:bg-blue-600"
-            >
-              <Download className="w-4 h-4" />
-              이미지 다운로드
-            </button>
-            <button
-              onClick={onClose}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <X className="w-4 h-4" />
-              닫기
-            </button>
+      {/* ----- 헤더 (버튼 영역) ----- */}
+      {showActions && (
+        <div className="sticky top-0 z-10 bg-white border-b">
+          <div className="flex items-center justify-between max-w-4xl px-8 py-4 mx-auto">
+            <h1 className="text-xl font-bold">대출 계약서</h1>
+            <div className="flex items-center gap-4">
+              {/* 이미지 다운로드 버튼 */}
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-colors bg-blue-500 rounded-lg hover:bg-blue-600"
+              >
+                <Download className="w-4 h-4" />
+                이미지 다운로드
+              </button>
+              {/* 닫기 버튼 */}
+              <button
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <X className="w-4 h-4" />
+                닫기
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Contract Content */}
       <div ref={contractRef} className="max-w-4xl p-8 mx-auto bg-white">

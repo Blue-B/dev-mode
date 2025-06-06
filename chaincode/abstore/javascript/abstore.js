@@ -10,12 +10,29 @@ const LoanShim = class {
   // =========================
   async Init(stub) {
     console.info('========= LoanShim Init =========');
-    // Invoke 예시 정보를 로그로 남김
-    let ret = stub.getFunctionAndParameters();
-    console.info('Init called with:', ret);
     try {
+      const ADMIN_WALLET_KEY = 'ADMIN_WALLET';
+
+      // 1) 원장에 ADMIN_WALLET이 이미 있는지 확인
+      let adminBytes = await stub.getState(ADMIN_WALLET_KEY);
+      if (adminBytes && adminBytes.length > 0) {
+        console.info(`ADMIN_WALLET already exists → 잔액 유지: ${adminBytes.toString()}`);
+        return shim.success();
+      }
+
+      // 2) ADMIN_WALLET이 없으면, balance 0으로 신규 생성
+      const adminWallet = {
+        address: ADMIN_WALLET_KEY,
+        balance: 0,
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+
+      await stub.putState(ADMIN_WALLET_KEY, Buffer.from(JSON.stringify(adminWallet)));
+      console.info('ADMIN_WALLET created with balance=0');
+
       return shim.success();
     } catch (err) {
+      console.error('Init 에러:', err);
       return shim.error(err);
     }
   }
@@ -116,7 +133,7 @@ const LoanShim = class {
     const borrower = args[2];
     const amount = parseInt(args[3], 10);
     const durationDays = parseInt(args[4], 10);
-    const interestRate = parseInt(args[5], 10);
+    const interestRate = parseFloat(args[5]);
 
     if (isNaN(amount) || isNaN(durationDays) || isNaN(interestRate)) {
       throw new Error('Amount, durationDays, interestRate must be integers');
@@ -157,7 +174,7 @@ const LoanShim = class {
   }
 
   // =========================
-  // ApproveLoanRequest: 개별 자금 대출 승인
+  // ApproveLoanRequest: 대출 요청 승인(체결) 및 수수료 이체
   // args = [id]
   // =========================
   async ApproveLoanRequest(stub, args) {
@@ -166,42 +183,61 @@ const LoanShim = class {
     }
     const id = args[0];
 
-    // 존재 여부 확인
+    // 1) 대출 요청 불러오기
     let loanBytes = await stub.getState(id);
     if (!loanBytes || loanBytes.length === 0) {
       throw new Error(`loan request ${id} does not exist`);
     }
-    let loan = JSON.parse(loanBytes.toString());
+    let loanObj  = JSON.parse(loanBytes.toString());
 
-    if (loan.status !== 'Pending') {
+    if (loanObj.status !== 'Pending') {
       throw new Error(`loan request ${id} is not pending`);
     }
 
-    // lender 지갑 조회 및 잔액 차감
-    let lenderWalletBytes = await stub.getState(loan.lender);
+    // 2) 수수료 계산 (0.1% = 0.001)
+    const feeRate = 0.001;
+    const feeAmount = loanObj.amount * feeRate;
+
+    // 3) 관리자 지갑 조회 및 잔액 증가
+    const ADMIN_WALLET_KEY = 'ADMIN_WALLET';
+    let adminWalletBytes = await stub.getState(ADMIN_WALLET_KEY);
+    if (!adminWalletBytes || adminWalletBytes.length === 0) {
+      throw new Error('ADMIN_WALLET이 존재하지 않습니다');
+    }
+    let adminWalletObj = JSON.parse(adminWalletBytes.toString());
+    adminWalletObj.balance += feeAmount;
+    await stub.putState(ADMIN_WALLET_KEY, Buffer.from(JSON.stringify(adminWalletObj)));
+    console.info(`수수료 ${feeAmount} 이체 → ADMIN_WALLET (새 잔액=${adminWalletObj.balance})`);
+
+    // 4) 채권자(lender) 지갑 조회 및 원금 차감
+    let lenderWalletBytes = await stub.getState(loanObj.lender);
     if (!lenderWalletBytes || lenderWalletBytes.length === 0) {
-      throw new Error(`lender wallet ${loan.lender} does not exist`);
+      throw new Error(`lender wallet ${loanObj.lender} does not exist`);
     }
-    let lenderWallet = JSON.parse(lenderWalletBytes.toString());
-    lenderWallet.balance -= loan.amount;
-    await stub.putState(loan.lender, Buffer.from(JSON.stringify(lenderWallet)));
+    let lenderWalletObj = JSON.parse(lenderWalletBytes.toString());
+    lenderWalletObj.balance -= loanObj.amount;
+    await stub.putState(loanObj.lender, Buffer.from(JSON.stringify(lenderWalletObj)));
+    console.info(`lender ${loanObj.lender} → 잔액 차감 ${loanObj.amount} (새 잔액=${lenderWalletObj.balance})`);
 
-    // borrower 지갑 조회 및 잔액 증가
-    let borrowerWalletBytes = await stub.getState(loan.borrower);
+    // 5) 차용자(borrower) 지갑 조회 및 (원금 – 수수료) 지급
+    let borrowerWalletBytes = await stub.getState(loanObj.borrower);
     if (!borrowerWalletBytes || borrowerWalletBytes.length === 0) {
-      throw new Error(`borrower wallet ${loan.borrower} does not exist`);
+      throw new Error(`borrower wallet ${loanObj.borrower} does not exist`);
     }
-    let borrowerWallet = JSON.parse(borrowerWalletBytes.toString());
-    borrowerWallet.balance += loan.amount;
-    await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
+    let borrowerWalletObj = JSON.parse(borrowerWalletBytes.toString());
+    const amountToBorrower = loanObj.amount - feeAmount;
+    borrowerWalletObj.balance += amountToBorrower;
+    await stub.putState(loanObj.borrower, Buffer.from(JSON.stringify(borrowerWalletObj)));
+    console.info(`borrower ${loanObj.borrower} → 잔액 증가 ${amountToBorrower} (새 잔액=${borrowerWalletObj.balance})`);
 
-    // 대출 상태 업데이트
-    loan.status = 'Active';
-    loan.startTime = Math.floor(Date.now() / 1000); 
-    // durationDays 이후(초 단위)
-    loan.endTime = Math.floor((Date.now() + durationDays * 24 * 60 * 60 * 1000) / 1000);
+    // 6) 대출 상태 업데이트
+    loanObj.status = 'Active';
+    loanObj.startTime = Math.floor(Date.now() / 1000);
+    loanObj.endTime = Math.floor((Date.now() + loanObj.durationDays * 24 * 60 * 60 * 1000) / 1000);
+    loanObj.feeCharged = feeAmount; // 실제 부과된 수수료 기록
+    await stub.putState(id, Buffer.from(JSON.stringify(loanObj)));
+    console.info(`ApproveLoanRequest: ${id} 승인 완료 (FeeCharged=${feeAmount})`);
 
-    await stub.putState(id, Buffer.from(JSON.stringify(loan)));
     return;
   }
 
@@ -581,57 +617,7 @@ const LoanShim = class {
     await stub.putState(id, Buffer.from(JSON.stringify(loan)));
     return;
   }
-
-  // =========================
-  // ApproveLoanRequest: 개별 자금 대출 승인
-  // args = [id]
-  // =========================
-  async ApproveLoanRequest(stub, args) {
-    if (args.length !== 1) {
-      throw new Error('Incorrect number of arguments. Expecting 1: [id]');
-    }
-    const id = args[0];
-
-    // 존재 여부 확인
-    let loanBytes = await stub.getState(id);
-    if (!loanBytes || loanBytes.length === 0) {
-      throw new Error(`loan request ${id} does not exist`);
-    }
-    let loan = JSON.parse(loanBytes.toString());
-
-    if (loan.status !== 'Pending') {
-      throw new Error(`loan request ${id} is not pending`);
-    }
-
-    // lender 지갑 조회 및 잔액 차감
-    let lenderWalletBytes = await stub.getState(loan.lender);
-    if (!lenderWalletBytes || lenderWalletBytes.length === 0) {
-      throw new Error(`lender wallet ${loan.lender} does not exist`);
-    }
-    let lenderWallet = JSON.parse(lenderWalletBytes.toString());
-    lenderWallet.balance -= loan.amount;
-    await stub.putState(loan.lender, Buffer.from(JSON.stringify(lenderWallet)));
-
-    // borrower 지갑 조회 및 잔액 증가
-    let borrowerWalletBytes = await stub.getState(loan.borrower);
-    if (!borrowerWalletBytes || borrowerWalletBytes.length === 0) {
-      throw new Error(`borrower wallet ${loan.borrower} does not exist`);
-    }
-    let borrowerWallet = JSON.parse(borrowerWalletBytes.toString());
-    borrowerWallet.balance += loan.amount;
-    await stub.putState(loan.borrower, Buffer.from(JSON.stringify(borrowerWallet)));
-
-    // 대출 상태 업데이트
-    loan.status = 'Active';
-    loan.startTime = Math.floor(Date.now() / 1000);
-
-    // ❗ 여기에서 durationDays 대신 loan.durationDays로 참조해야 합니다.
-    loan.endTime = Math.floor((Date.now() + loan.durationDays * 24 * 60 * 60 * 1000) / 1000);
-
-    await stub.putState(id, Buffer.from(JSON.stringify(loan)));
-    return;
-  }
-
+  
   // =========================
   // RepayLoanToPool: 풀 기반 대출 상환 및 이자 누적
   // args = [id]
@@ -737,7 +723,7 @@ const LoanShim = class {
     const [id, name, minDepositStr, interestRateStr, durationMonthsStr, creatorAddress, initialDepositStr] = args;
 
     const minDeposit = parseInt(minDepositStr, 10);
-    const interestRate = parseInt(interestRateStr, 10);
+    const interestRate = parseFloat(interestRateStr);
     const durationMonths = parseInt(durationMonthsStr, 10);
     const initialDeposit = parseInt(initialDepositStr, 10);
 

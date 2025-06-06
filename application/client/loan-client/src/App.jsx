@@ -1,191 +1,93 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Header from "./components/Header";
-import Navbar from "./components/Nav";
-import MyPage from "./pages/MyPage";
-import Main from "./pages/Main";
-import FinancialStatus from "./pages/FinancialStatus";
-import Friend from "./pages/Friend";
-import Loanpool from "./pages/LoanPool";
-import Setting from "./pages/Setting";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import Main from "./pages/main/Main";
+import ServiceIntro from "./pages/service/ServiceIntro";
+import Blog from "./pages/service/Blog";
+import Partners from "./pages/service/Partners";
+import Careers from "./pages/service/Careers";
+import Privacy from "./pages/legal/Privacy";
+import Terms from "./pages/legal/Terms";
+import Inquiry from "./pages/support/Inquiry";
+import Login from "./pages/main/Login";
 import Signup from "./pages/Signup";
-import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import PasswordFind from "./pages/PassWord";
-import ServiceIntro from "./pages/ServiceIntro";
-import ServiceMethod from "./pages/Service-Method";
-import Inquiry from "./pages/Inquiry";
-import Question from "./pages/Question";
-import EnsuringStability from "./pages/Ensuring-Stability";
-import Error from "./pages/Error";
+import LoanPool from "./pages/LoanPool";
+import Friend from "./pages/Friend";
 import FriendLoanRequest from "./pages/FriendLoanRequest";
-import LoanAgreement from "./pages/contract/LoanAgreement";
-
-
-// 보호된 라우트 컴포넌트: 로그인한 사용자만 접근 가능
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();  // AuthContext에서 현재 로그인 상태 가져오기
-
-  if (loading) {
-    return <div>Loading...</div>;  // 로딩 중일 때 표시
-  }
-  
-  // if (!user) {
-  //   return <Navigate to="/login" />;  // 로그인 안 되어있으면 로그인 페이지로 강제 이동
-  // }
-  
-  return children;  // 로그인 되어있으면 원래 보여줄 컴포넌트 표시
-};
+import FinancialStatus from "./pages/FinancialStatus";
+import MyPage from "./pages/MyPage";
+import Setting from "./pages/Setting";
+import Header from "./components/Header";
+import Nav from "./components/Nav";
+import Error from "./pages/Error";
+import Question from "./pages/Question";
+import ServiceIntroduction from "./pages/Service-Introduction";
+import ServiceMethod from "./pages/Service-Method";
+import EnsuringStability from "./pages/Ensuring-Stability";
+import Contract from "./pages/Constract";
+import Password from "./pages/PassWord";
 
 // 앱의 기본 레이아웃 컴포넌트
 function AppLayout({ children }) {
-  const location = useLocation();
-  // 네비게이션 바를 숨길 경로들
-  const hideNavPaths = ['/signup', '/login', '/password'];
-
   return (
-    <div className="flex flex-col h-screen">
-      <Header />  {/* 상단 헤더는 항상 표시 */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 로그인/회원가입 페이지에서는 네비게이션 바 숨김 */}
-        {!hideNavPaths.includes(location.pathname) && <Navbar />}
-        <div className="flex-1 overflow-y-auto">
-          {children}  {/* 실제 페이지 내용 */}
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <div className="flex-1">
+        {children}
       </div>
     </div>
   );
 }
 
-const RedirectToMain = () => {
-  const { user } = useAuth();
-  return user ? <Navigate to="/" replace /> : <Navigate to="/login" replace />;
-};
+// 대시보드 레이아웃 컴포넌트
+function DashboardLayout({ children }) {
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <div className="flex flex-1">
+        <Nav />
+        <main className="flex-1">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   return (
-    // AuthProvider로 전체 앱을 감싸서 인증 상태를 전역적으로 관리
-    <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Public Routes: 로그인 없이 접근 가능한 페이지들 */}
-          <Route path="/" element={<Main />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/password" element={<PasswordFind />} />
-          <Route path="/service-intro" element={<ServiceIntro />} />
-          <Route path="/service-method" element={<ServiceMethod />} />
-          <Route path="/ensuring-stability" element={<EnsuringStability />} />
-          <Route path="/question" element={<Question />} />
-          <Route path="/inquiry" element={<Inquiry />} />
-
-          {/* Protected Routes: 로그인한 사용자만 접근 가능한 페이지들 */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>  {/* 로그인 체크 */}
-                <AppLayout>     {/* 기본 레이아웃 적용 */}
-                  <Main /> {/* 실제 페이지 컴포넌트 */}
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>  {/* 로그인 체크 */}
-                <AppLayout>     {/* 기본 레이아웃 적용 */}
-                  <Dashboard /> {/* 실제 페이지 컴포넌트 */}
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/dashboard/request"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <FriendLoanRequest />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/mypage"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <MyPage />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/constract"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <LoanAgreement />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/financialstatus"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <FinancialStatus />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/friend"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Friend />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/request"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <FriendLoanRequest />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/loanpool"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Loanpool />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/setting"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Setting />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Error />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <Router>
+      <Routes>
+        <Route path="/" element={<AppLayout><Main /></AppLayout>} />
+        <Route path="/service-intro" element={<AppLayout><ServiceIntro /></AppLayout>} />
+        <Route path="/blog" element={<AppLayout><Blog /></AppLayout>} />
+        <Route path="/partners" element={<AppLayout><Partners /></AppLayout>} />
+        <Route path="/careers" element={<AppLayout><Careers /></AppLayout>} />
+        <Route path="/privacy" element={<AppLayout><Privacy /></AppLayout>} />
+        <Route path="/terms" element={<AppLayout><Terms /></AppLayout>} />
+        <Route path="/inquiry" element={<AppLayout><Inquiry /></AppLayout>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/question" element={<AppLayout><Question /></AppLayout>} />
+        <Route path="/service-introduction" element={<AppLayout><ServiceIntroduction /></AppLayout>} />
+        <Route path="/service-method" element={<AppLayout><ServiceMethod /></AppLayout>} />
+        <Route path="/ensuring-stability" element={<AppLayout><EnsuringStability /></AppLayout>} />
+        <Route path="/contract" element={<AppLayout><Contract /></AppLayout>} />
+        <Route path="/password" element={<AppLayout><Password /></AppLayout>} />
+        
+        {/* 대시보드 관련 라우트 */}
+        <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+        <Route path="/loanpool" element={<DashboardLayout><LoanPool /></DashboardLayout>} />
+        <Route path="/friend" element={<DashboardLayout><Friend /></DashboardLayout>} />
+        <Route path="/dashboard/request" element={<DashboardLayout><FriendLoanRequest /></DashboardLayout>} />
+        <Route path="/financialstatus" element={<DashboardLayout><FinancialStatus /></DashboardLayout>} />
+        <Route path="/mypage" element={<DashboardLayout><MyPage /></DashboardLayout>} />
+        <Route path="/setting" element={<DashboardLayout><Setting /></DashboardLayout>} />
+        
+        {/* 404 에러 페이지 */}
+        <Route path="*" element={<Error />} />
+      </Routes>
+    </Router>
   );
 }
 

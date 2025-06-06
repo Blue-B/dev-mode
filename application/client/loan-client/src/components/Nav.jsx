@@ -12,13 +12,8 @@ import {
 } from "@heroicons/react/24/solid";
 import { NavLink, useNavigate } from "react-router-dom";
 import avatar from "../assets/avatar.png";
-import { createClient } from "@supabase/supabase-js";
-import { getWalletBalance } from "../services/api"; // 잔액 조회 함수
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
+import { getUserWalletAddress, getWalletBalance } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 // 금액을 한글 단위로 변환하는 유틸리티 함수
 const formatAmount = (amount) => {
@@ -38,13 +33,12 @@ const Nav = () => {
   const [balance, setBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(true);
   const navigate = useNavigate();
+  const { user, signOut, supabase } = useAuth();
 
   // 1) 현재 로그인한 유저 정보 가져오기
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error) throw error;
         if (user) {
           // 지갑주소 조회
           const { data: profile, error: profErr } = await supabase
@@ -67,7 +61,7 @@ const Nav = () => {
       }
     };
     loadUser();
-  }, []);
+  }, [user, supabase]);
 
   // 2) 지갑 주소가 세팅되면 잔액 조회
   useEffect(() => {
@@ -86,8 +80,7 @@ const Nav = () => {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await signOut();
       navigate("/");
     } catch (err) {
       console.error("로그아웃 에러:", err);

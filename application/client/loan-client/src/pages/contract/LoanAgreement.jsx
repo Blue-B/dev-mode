@@ -1,25 +1,29 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from '../../contexts/AuthContext';
-import { createLoan, getUserProfile } from '../../services/api';
+import { createLoan, getUserProfile, approveLoan, denyLoan, downloadAndSaveContract } from '../../services/api';
 import DetailedContract from "./DetailedContract";
 import SignatureModal from "./SignatureModal";
 import { X, FileText, PenTool } from "lucide-react";
 import html2canvas from "html2canvas";
+import { createClient } from '@supabase/supabase-js';
 
-
+const supabase = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.REACT_APP_SUPABASE_ANON_KEY);
 
 export default function LoanAgreement({
   loanData,
   selectedFriend,
+  borrowerProfile,
   estimatedRepaymentDate,
   totalRepayment,
   startDate,
   endDate,
   goToPreviousStep,
-  goToNextStep
+  goToNextStep,
+  onClose,      // 모달 닫기 콜백
+  onApprove,    // 승인 시 호출될 콜백
+  onReject      // 거절 시 호출될 콜백
 }) {
-  const navigate = useNavigate();
+
   const [showDetailedContract, setShowDetailedContract] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentSigner, setCurrentSigner] = useState(null);
@@ -30,7 +34,6 @@ export default function LoanAgreement({
  
   const [isRequesting, setIsRequesting] = useState(false);
   const { user } = useAuth();
-  const isLoggedIn = !!user;
   
   const [myProfile, setMyProfile] = useState(null); // 현재 로그인된 사용자의 프로필
    
@@ -47,6 +50,28 @@ export default function LoanAgreement({
     })();
   }, [user]);
   
+  useEffect(() => {
+    // 대출자(갑), 채무자(을) user_id로 서명 불러오기
+    const fetchSignatures = async () => {
+      if (!selectedFriend?.id || !user?.id) return;
+      const { data: lenderSig } = await supabase
+        .from('signatures')
+        .select('signature_data')
+        .eq('user_id', selectedFriend.id)
+        .single();
+      const { data: borrowerSig } = await supabase
+        .from('signatures')
+        .select('signature_data')
+        .eq('user_id', user.id)
+        .single();
+      setSignatures({
+        lender: lenderSig?.signature_data ? `data:image/svg+xml;base64,${lenderSig.signature_data}` : null,
+        borrower: borrowerSig?.signature_data ? `data:image/svg+xml;base64,${borrowerSig.signature_data}` : null
+      });
+    };
+    fetchSignatures();
+  }, [selectedFriend?.id, user?.id]);
+  
   const contractData = {
     amount: loanData?.amount || "0",
     interestRate: loanData?.interestRate || "0",
@@ -61,13 +86,13 @@ export default function LoanAgreement({
     lenderPhone: selectedFriend?.phone || "010-8674-7678",
     lenderAddress: selectedFriend?.address || "충남 천안시 서북구",
 
-    // (2) 대출받는 사람(차입자) 정보: 내 프로필에서 가져옴
-    borrowerName: myProfile?.name || "",
-    borrowerSSN: myProfile?.birth_number 
-        ? `${myProfile.birth_number}-${"*".repeat(7)}`
-        : "010120-3******",
-    borrowerPhone: myProfile?.phone || "010-8674-7678",
-    borrowerAddress: myProfile?.address || "충남 천안시 서북구",
+    // (2) 채무자 정보: borrowerProfile에서 가져온다
+    borrowerName: borrowerProfile?.name || "",
+    borrowerSSN: borrowerProfile?.birth_number
+      ? `${borrowerProfile.birth_number}-${"*".repeat(7)}`
+      : "",
+    borrowerPhone: borrowerProfile?.phone || "",
+    borrowerAddress: borrowerProfile?.address || "",
 
     guarantor: "김보증 (주민등록번호: 010120-3******, 주소: 충남 천안시 서북구)"
   };
@@ -77,16 +102,6 @@ export default function LoanAgreement({
     window.history.back();
   };
   
-  const handleSign = () => {
-    setCurrentSigner('borrower');
-    setShowSignatureModal(true);
-  };
-
-  const handleLenderSign = () => {
-    setCurrentSigner('lender');
-    setShowSignatureModal(true);
-  };
-
   const handleDocumentClick = () => {
     setShowDetailedContract(true);
   };
@@ -101,51 +116,145 @@ export default function LoanAgreement({
       [currentSigner]: signatureData
     }));
   };
-     // 대출 요청 생성
+   // ────────────────────────────────────────────────
+  // 3) off‐screen(DOM에 보이지 않는) 상태로 DetailedContract 내용을 렌더링할 ref
+  //    이 ref에 연결된 DOM을 html2canvas로 캡처하면 DetailedContract 전체가 그림으로 생성됨
+  // ────────────────────────────────────────────────
+  const downloadRef = useRef(null);
+
+  // 4) 대출 생성 + 계약서 다운로드 + 서버 전송
   const handleSendLoan = async () => {
+    if (isRequesting) return;
+    setIsRequesting(true);
 
-    if (isRequesting) return; // 중복 요청 방지 (중요!)
-
-    setIsRequesting(true); // 요청 시작 시 상태 업데이트
-    
     try {
-      // 1. 계약서 이미지 생성
-      const contractRef = document.querySelector('.contract-preview');
-      if (!contractRef) {
-        throw new Error('계약서 미리보기를 찾을 수 없습니다.');
+      // (1) DetailedContract 내용을 캡처해서 자동 다운로드
+      if (downloadRef.current) {
+        // DOM이 충분히 그려질 시간을 100ms 정도 줍니다
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const canvas = await html2canvas(downloadRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff"
+        });
+
+        // Blob을 만들어서 자동 다운로드
+        await new Promise(res => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `대출계약서_${contractData.lenderName}_${contractData.borrowerName}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+            res(null);
+          }, 'image/png');
+        });
+
+        // (2) 같은 canvas 객체에서 Base64 추출 → 서버에 보낼 준비
+        const base64DataUrl = canvas.toDataURL('image/png');
+
+        // (3) createLoan API 요청 (서버에서 Base64 받아서 해시 저장 로직이 있어야 함)
+        const result = await createLoan({
+          ...loanData,
+          contractImage: base64DataUrl
+        });
+
+        console.log('📦 대출 생성 결과:', result);
+        alert('대출 요청되었습니다.');
+        goToNextStep(4);
       }
-
-      const canvas = await html2canvas(contractRef, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff"
-      });
-
-      // 2. 이미지를 Blob으로 변환
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const contractImage = await blob.text();
-
-      // 3. 대출 생성 요청 (계약서 이미지 포함)
-      const result = await createLoan({
-        ...loanData,
-        contractImage
-      });
-
-      console.log('📦 대출 생성 결과:', result);
-        
-      alert('대출 요청되었습니다.');
-      goToNextStep(4);
-      
     } catch (error) {
       console.error('대출 생성 실패:', error);
-      alert('대출 생성 실패: ' + (error?.response?.data?.message || error.message));
+      alert('대출 생성 실패: ' + (error?.message || error));
     } finally {
-      setIsRequesting(false); // 요청 종료 후 상태 초기화
+      setIsRequesting(false);
     }
   };
   
 
+    // “승인하기” 버튼 클릭 핸들러
+  const handleApprove = async () => {
+    if (isRequesting) return;
+    setIsRequesting(true);
+
+    try {
+      // ─────────────── (1) 오프스크린 DetailedContract 캡처 + 자동 다운로드 ───────────────
+      if (downloadRef.current) {
+        // DOM이 충분히 렌더링될 시간을 잠시 주기 (100ms 정도)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // html2canvas로 캡처
+        const canvas = await html2canvas(downloadRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
+
+        // Blob으로 변환 후 자동 다운로드
+        await new Promise((res) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `대출계약서_${loanData.lender}_${loanData.borrower}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+            res(null);
+          }, "image/png");
+        });
+
+        // 동일한 canvas 객체에서 Base64 문자열 추출
+        const base64DataUrl = canvas.toDataURL("image/png");
+
+        // (2) 서버에 계약서 저장 + 해시 남기기 (예: downloadAndSaveContract API 사용)
+        //    downloadAndSaveContract 함수가 (loanId, contractImage) 형태로 정의되어 있어야 함
+        await downloadAndSaveContract(loanData.id, base64DataUrl);
+      }
+
+      // ─────────────── (3) 실제 승인 API 호출 (부모 콜백) ───────────────
+      await onApprove();
+
+      // 모달 닫기
+      onClose();
+    } catch (error) {
+      console.error("승인 처리 실패:", error);
+      alert("승인 중 오류가 발생했습니다.");
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  // 계약서 거절 처리
+  const handleReject = async () => {
+    setIsRequesting(true);
+    try {
+      await denyLoan(loanData.id);
+      onReject();   // 부모에게 “거절됨”을 알리는 콜백 호출
+    } catch (error) {
+      console.error("거절 처리 실패:", error);
+      alert("거절 중 오류가 발생했습니다.");
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  // 현재 로그인된 사용자가 “대출자(채권자)” 인지 여부 확인
+  const isLender = myProfile?.wallet_id === loanData.lender;
+  // 6) 현재 로그인된 사용자가 “차입자”인지 체크
+  const isBorrower = myProfile?.wallet_id === loanData.borrower;
+  
   return (
     <>
       {showDetailedContract ? (
@@ -177,38 +286,25 @@ export default function LoanAgreement({
             {/* Document Preview Section */}
             <div className="px-6 pb-2">
               <div className="relative p-4 mb-4 rounded-lg bg-gray-50 contract-preview">
-                {/* Document Icon with Blue Stamp */}
                 <div className="flex justify-center mb-4">
                   <div className="relative cursor-pointer" onClick={handleDocumentClick}>
-                    {/* White document paper */}
                     <div className="flex flex-col justify-between w-24 h-32 p-2 bg-white border border-gray-200 rounded-sm shadow-sm">
-                      {/* Top text lines */}
                       <div className="space-y-1">
                         <div className="h-0.5 bg-gray-300 rounded w-3/4"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-full"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-1/2"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-2/3"></div>
                       </div>
-                      {/* Bottom text lines */}
                       <div className="space-y-1">
                         <div className="h-0.5 bg-gray-300 rounded w-2/3"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-full"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-3/4"></div>
                       </div>
                     </div>
-                    {/* Blue circular stamp with document icon */}
                     <div className="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
                       <div className="flex items-center justify-center w-10 h-10 bg-blue-500 rounded-full">
                         <FileText className="w-5 h-5 text-white" />
                       </div>
-                    </div>
-                    {/* Signature line - positioned at bottom right of document */}
-                    <div className="absolute font-serif text-xs italic text-gray-400 bottom-1 right-1">
-                      {signatures.lender ? (
-                        <img src={signatures.lender} alt="서명" className="h-4" />
-                      ) : (
-                        contractData.borrowerName
-                      )}
                     </div>
                   </div>
                 </div>
@@ -222,6 +318,10 @@ export default function LoanAgreement({
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-900">(갑)채권자</h3>
                     <div className="space-y-1.5 text-xs">
+                     <div className="flex justify-between">
+                      <span className="text-gray-600">이름</span>
+                      <span className="font-medium text-right text-gray-900">{contractData.lenderName}</span>
+                    </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주소</span>
                         <span className="font-medium text-right text-gray-900">{contractData.lenderAddress}</span>
@@ -234,10 +334,6 @@ export default function LoanAgreement({
                         <span className="text-gray-600">연락처</span>
                         <span className="text-right text-gray-900">{contractData.lenderPhone}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600"></span>
-                        <span className="text-right text-gray-900"></span>
-                      </div>
                     </div>
                   </div>
                   
@@ -245,9 +341,13 @@ export default function LoanAgreement({
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-900">(을)채무자</h3>
                     <div className="space-y-1.5 text-xs">
+                     <div className="flex justify-between">
+                        <span className="text-gray-600">이름</span>
+                        <span className="font-medium text-right text-gray-900">{contractData.borrowerName}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주소</span>
-                        <span className="font-medium text-right text-gray-900">{contractData.borrowerName}</span>
+                        <span className="font-medium text-right text-gray-900">{contractData.borrowerAddress}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">주민등록번호</span>
@@ -256,10 +356,6 @@ export default function LoanAgreement({
                       <div className="flex justify-between">
                         <span className="text-gray-600">연락처</span>
                         <span className="text-right text-gray-900">{contractData.borrowerPhone}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600"></span>
-                        <span className="text-right text-gray-900"></span>
                       </div>
                     </div>
                   </div>
@@ -287,24 +383,6 @@ export default function LoanAgreement({
                   </div>
                 </div>
                 
-                {/* Action Buttons */}
-                <div className="flex justify-center gap-2 pt-2">
-                  <button 
-                    onClick={handleLenderSign}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    채권자 서명
-                  </button>
-                  <button 
-                    onClick={handleSign}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    채무자 서명
-                  </button>
-                </div>
-                
                 {/* Legal Notice */}
                 <div className="px-2 py-2 text-xs text-center text-gray-500">
                   본 계약은 상기 조건에 따라 대출이 적용될 수 있습니다. 모든 사항<br />
@@ -313,20 +391,43 @@ export default function LoanAgreement({
                 
                 {/* Main Action Button */}
                 <div className="pt-2 pb-4">
-                  <button 
+                {/* 8) 차입자(Borrower)인 경우, “대출 요청하기” 버튼 */}
+                {isBorrower && (
+                  <button
                     onClick={handleSendLoan}
                     disabled={isRequesting}
-                    className={`w-full py-3 text-sm font-medium text-white transition-colors rounded-xl 
-                      ${isRequesting ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-6 py-3 text-sm font-medium text-white rounded-lg ${
+                      isRequesting ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+                    }`}
                   >
-                    {isRequesting ? '요청 중...' : '대출 요청하기'}
+                    {isRequesting ? "요청 중..." : "대출 요청하기"}
                   </button>
+                )}
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <div
+        ref={downloadRef}
+        style={{
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+          width: '840px',    // DetailedContract 내부의 max-w-4xl(≈ 768px) 보다 살짝 넉넉하게
+          padding: '0',
+          margin: '0'
+        }}
+      >
+        <DetailedContract
+          contractData={contractData}
+          onClose={() => {}}
+          signatures={signatures}
+          showActions={false}  // ★ 버튼을 렌더링하지 않도록 false로 설정
+        />
+      </div>
 
       {/* Signature Modal */}
       {showSignatureModal && (
@@ -335,6 +436,26 @@ export default function LoanAgreement({
           onSave={handleSaveSignature}
         />
       )}
+
+          {/* ───── 하단 버튼: “승인/거절”은 채권자에게만 보여줘야 함 ───── */}
+        {isLender && (
+          <div className="flex items-center justify-end gap-4 px-6 py-4 border-t bg-gray-50">
+            <button
+              onClick={handleReject}
+              disabled={isRequesting}
+              className="px-6 py-3 text-sm font-medium text-red-600 rounded-lg bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              거절하기
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={isRequesting}
+              className="px-6 py-3 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              승인하기
+            </button>
+          </div>
+        )}
     </>
   );
 }
