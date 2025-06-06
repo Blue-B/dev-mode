@@ -16,6 +16,7 @@
     "express": "^4.21.2",
     "fabric-ca-client": "^2.2.9",
     "fabric-network": "^2.2.9",
+    "node-cron": "^4.1.0",
     "path-to-regexp": "^6.2.1",
     "resend": "^4.5.2"
   }
