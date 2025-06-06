@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../../contexts/AuthContext';
 import { createLoan, getUserProfile } from '../../services/api';
@@ -114,46 +114,65 @@ export default function LoanAgreement({
       [currentSigner]: signatureData
     }));
   };
-     // 대출 요청 생성
+   // ────────────────────────────────────────────────
+  // 3) off‐screen(DOM에 보이지 않는) 상태로 DetailedContract 내용을 렌더링할 ref
+  //    이 ref에 연결된 DOM을 html2canvas로 캡처하면 DetailedContract 전체가 그림으로 생성됨
+  // ────────────────────────────────────────────────
+  const downloadRef = useRef(null);
+
+  // 4) 대출 생성 + 계약서 다운로드 + 서버 전송
   const handleSendLoan = async () => {
-    if (isRequesting) return; // 중복 요청 방지 (중요!)
+    if (isRequesting) return;
+    setIsRequesting(true);
 
-    setIsRequesting(true); // 요청 시작 시 상태 업데이트
-    
     try {
-      // 1. 계약서 이미지 생성
-      const contractRef = document.querySelector('.contract-preview');
-      if (!contractRef) {
-        throw new Error('계약서 미리보기를 찾을 수 없습니다.');
+      // (1) DetailedContract 내용을 캡처해서 자동 다운로드
+      if (downloadRef.current) {
+        // DOM이 충분히 그려질 시간을 100ms 정도 줍니다
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const canvas = await html2canvas(downloadRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff"
+        });
+
+        // Blob을 만들어서 자동 다운로드
+        await new Promise(res => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `대출계약서_${contractData.lenderName}_${contractData.borrowerName}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+            res(null);
+          }, 'image/png');
+        });
+
+        // (2) 같은 canvas 객체에서 Base64 추출 → 서버에 보낼 준비
+        const base64DataUrl = canvas.toDataURL('image/png');
+
+        // (3) createLoan API 요청 (서버에서 Base64 받아서 해시 저장 로직이 있어야 함)
+        const result = await createLoan({
+          ...loanData,
+          contractImage: base64DataUrl
+        });
+
+        console.log('📦 대출 생성 결과:', result);
+        alert('대출 요청되었습니다.');
+        goToNextStep(4);
       }
-
-      const canvas = await html2canvas(contractRef, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff"
-      });
-
-      // 2. 이미지를 Blob으로 변환
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const contractImage = await blob.text();
-
-      // 3. 대출 생성 요청 (계약서 이미지 포함)
-      const result = await createLoan({
-        ...loanData,
-        contractImage
-      });
-
-      console.log('📦 대출 생성 결과:', result);
-        
-      alert('대출 요청되었습니다.');
-      goToNextStep(4);
-      
     } catch (error) {
       console.error('대출 생성 실패:', error);
-      alert('대출 생성 실패: ' + (error?.response?.data?.message || error.message));
+      alert('대출 생성 실패: ' + (error?.message || error));
     } finally {
-      setIsRequesting(false); // 요청 종료 후 상태 초기화
+      setIsRequesting(false);
     }
   };
   
@@ -300,6 +319,25 @@ export default function LoanAgreement({
           </div>
         </div>
       )}
+
+      <div
+        ref={downloadRef}
+        style={{
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+          width: '840px',    // DetailedContract 내부의 max-w-4xl(≈ 768px) 보다 살짝 넉넉하게
+          padding: '0',
+          margin: '0'
+        }}
+      >
+        <DetailedContract
+          contractData={contractData}
+          onClose={() => {}}
+          signatures={signatures}
+          showActions={false}  // ★ 버튼을 렌더링하지 않도록 false로 설정
+        />
+      </div>
 
       {/* Signature Modal */}
       {showSignatureModal && (
