@@ -454,65 +454,185 @@ async function queryLoan(id) {
   return typeof result === 'string' ? JSON.parse(result) : result;
 }
 
-// 대출 상환
+// =========================
+// 대출 상환 엔드포인트
+// POST /loan/repay
+// =========================
+
 app.post('/loan/repay', async (req, res) => {
   const { loanId } = req.body;
   console.log('[RepayLoan] 상환 요청 도착 → loanId:', loanId);
 
   try {
-    // 체인코드 트랜잭션 실행
-    const result = await sdk.send(false, 'RepayLoan', [loanId], res);
-    console.log('[RepayLoan] 체인 응답:', result);
+    //
+    // 1) 먼저 Supabase에서 해당 loanId로 “profile UUID”를 포함한 대출 정보를 조회합니다.
+    //
+    const { data: loanRow, error: loanSelectError } = await supabase
+      .from('loans')
+      .select('due_date, borrower_id, lender_id, amount, interest_rate, duration_days, status')
+      .eq('id', loanId)
+      .single();
 
-    // 체인에서 loan 정보 조회
-    const loan = await queryLoan(loanId);
-    const parsed = typeof loan === 'string' ? JSON.parse(loan) : loan;
+    if (loanSelectError || !loanRow) {
+      console.error('[RepayLoan] 대출 정보 조회 실패:', loanSelectError);
+      return res.status(400).json({ error: '대출 정보를 찾을 수 없습니다.' });
+    }
 
-
-    if (parsed.status === 'Repaid') {
+    // 이미 DB에서 상태가 “repaid”라면 바로 응답
+    if (loanRow.status.toLowerCase() === 'repaid') {
       return res.json({ success: true, message: '이미 상환된 대출입니다.' });
     }
-    
-    // 이자 계산
-    const amount = Number(parsed.amount);
-    const rate = Number(parsed.interestRate);
-    const days = Number(parsed.durationDays);
-    const interest = Math.floor((amount * rate * days) / (365 * 100));
-    const totalAmount = amount + interest;
 
-    
-    console.log(`🟢 [RepayLoan] ${parsed.borrower} → ${parsed.lender}에게 ${totalAmount} 상환 처리`);
+    //
+    // 2) 체인에서 현재 대출 상태를 한 번 더 확인합니다.
+    //
+    const chainLoan = await queryLoan(loanId);
+    const parsed = typeof chainLoan === 'string' ? JSON.parse(chainLoan) : chainLoan;
 
-    // Supabase에 상환 기록 저장
-    const { error: insertError } = await supabase.from('wallet_transactions').insert([
-      {
-        user_id: parsed.borrower,
-        type: 'repay',
-        amount: -totalAmount,
-        related_user_id: parsed.lender,
-        loan_id: parsed.id,
-        memo: '친구 대출 상환 - 출금',
-      },
-      {
-        user_id: parsed.lender,
-        type: 'repay_received',
-        amount: totalAmount,
-        related_user_id: parsed.borrower,
-        loan_id: parsed.id,
-        memo: '친구 대출 상환 - 입금',
-      },
-    ]);
+    if (parsed.status.toLowerCase() === 'repaid') {
+      // 체인 상에서 이미 Repaid 상태인 경우, DB에도 업데이트만 해주고 응답
+      await supabase
+        .from('loans')
+        .update({
+          status: 'repaid',
+          repaid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', loanId);
+
+      return res.json({ success: true, message: '체인에서 이미 상환된 상태입니다. DB 업데이트만 완료했습니다.' });
+    }
+
+    //
+    // 3) 이제 “RepayLoan” 체인 트랜잭션을 보냅니다.
+    //
+    const result = await sdk.send(false, 'RepayLoan', [loanId]);
+    console.log('[RepayLoan] 체인 응답:', result);
+
+    //
+    // 4) 이자 계산 (원금 + 이자)
+    //
+    const amount       = Number(loanRow.amount);
+    const rate         = Number(loanRow.interest_rate);
+    const days         = Number(loanRow.duration_days);
+    const interest     = Math.floor((amount * rate * days) / (365 * 100));
+    const totalAmount  = amount + interest;
+
+    console.log(
+      `🟢 [RepayLoan] 프로필(${loanRow.borrower_id}) → 프로필(${loanRow.lender_id})에게 ${totalAmount} 상환 처리`
+    );
+
+    //
+    // 5) Supabase의 wallet_transactions 테이블에 “출금/입금” 거래 기록을 남깁니다.
+    //
+    const { error: insertError } = await supabase
+      .from('wallet_transactions')
+      .insert([
+        {
+          user_id:         loanRow.borrower_id,    // borrower 프로필 UUID
+          type:            'repay',
+          amount:         -totalAmount,
+          related_user_id: loanRow.lender_id,      // lender 프로필 UUID
+          loan_id:         loanId,
+          memo:            '친구 대출 상환 - 출금',
+        },
+        {
+          user_id:         loanRow.lender_id,      // lender 프로필 UUID
+          type:            'repay_received',
+          amount:          totalAmount,
+          related_user_id: loanRow.borrower_id,    // borrower 프로필 UUID
+          loan_id:         loanId,
+          memo:            '친구 대출 상환 - 입금',
+        },
+      ]);
 
     if (insertError) {
       console.error('📛 Supabase 상환 기록 실패:', insertError);
       return res.status(500).json({ error: '상환은 완료되었으나 거래 기록 저장 실패' });
     }
 
-    res.json({ success: true, result: result.toString() });
+    //
+    // 6) “due_date”와 현재 시점을 비교하여 가산점(Bonus)을 계산하고, 신용점수를 업데이트합니다.
+    //
+    const nowMs     = Date.now();
+    const dueDateMs = new Date(loanRow.due_date).getTime();
+    const diffMs    = dueDateMs - nowMs;
+    const ONE_DAY  = 1000 * 60 * 60 * 24;
+
+    let bonusPoint = 0;
+    if (diffMs >= 7 * ONE_DAY) {
+      // 기한보다 7일 이상 빨리 상환
+      bonusPoint = 30;
+    } else if (diffMs >= ONE_DAY && diffMs < 7 * ONE_DAY) {
+      // 기한보다 1~6일 빨리 상환
+      bonusPoint = 25;
+    } else if (diffMs >= 0 && diffMs < ONE_DAY) {
+      // 기한 당일까지 상환
+      bonusPoint = 20;
+    }
+    // diffMs < 0 이면 이미 기한 지난 연체이므로 가산점 없음
+
+    if (bonusPoint > 0) {
+      // 현재 프로필의 credit_score 조회
+      const { data: profileRow, error: profSelectError } = await supabase
+        .from('profiles')
+        .select('credit_score')
+        .eq('id', loanRow.borrower_id)
+        .single();
+
+      if (profSelectError || !profileRow) {
+        console.error('[RepaymentBonus] 프로필 조회 실패:', profSelectError);
+      } else {
+        const currentScore = profileRow.credit_score || 0;
+        const newScore     = currentScore + bonusPoint;
+
+        const { error: profUpdateError } = await supabase
+          .from('profiles')
+          .update({
+            credit_score: newScore,
+            updated_at:   new Date().toISOString()
+          })
+          .eq('id', loanRow.borrower_id);
+
+        if (profUpdateError) {
+          console.error('[RepaymentBonus] credit_score 업데이트 실패:', profUpdateError);
+        } else {
+          console.log(
+            `[RepaymentBonus] borrower(${loanRow.borrower_id})에게 +${bonusPoint}점 가산 → 새 점수=${newScore}`
+          );
+        }
+      }
+    }
+
+    //
+    // 7) “loans” 테이블에 status='repaid'와 repaid_at, updated_at을 기록합니다.
+    //
+    const { error: loanUpdateError } = await supabase
+      .from('loans')
+      .update({
+        status:     'repaid',
+        repaid_at:  new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loanId);
+
+    if (loanUpdateError) {
+      console.error('[RepayLoan] loans 테이블 업데이트 실패:', loanUpdateError);
+    } else {
+      console.log('[RepayLoan] loans 테이블 repaid_at 업데이트 성공 → loanId:', loanId);
+    }
+
+    //
+    // 8) 최종 응답
+    //
+    return res.json({
+      success: true,
+      result:  result.toString()
+    });
 
   } catch (err) {
-    console.error('[RepayLoan] 체인코드 실행 오류:', err);
-    res.status(500).json({ error: err.message });
+    console.error('[RepayLoan] 체인코드 실행 또는 기타 오류 발생:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -1122,6 +1242,20 @@ app.listen(PORT, HOST, async () => {
   });
     console.log('✅ 1분마다 실행 (테스트용) 연체 확인(cron)이 예약되었습니다.');
 
+      // ── 매월 1일 00:00(한국시간)에 prev_credit_score을 갱신 ──
+  cron.schedule(
+    '0 0 1 * *',
+    () => {
+      console.log('🔄 [cron] 매월 1일 prev_credit_score 갱신 시작 →', new Date().toISOString());
+      updatePrevCreditScores().catch(err => {
+        console.error('[cron] updatePrevCreditScores 오류:', err);
+      });
+    },
+    {
+      timezone: 'Asia/Seoul',
+    }
+  );
+  console.log('✅ 매월 1일 00:00에 prev_credit_score 갱신(cron)이 예약되었습니다.');
 
 });
 
@@ -1513,6 +1647,43 @@ app.post('/api/contract/save', async (req, res) => {
     });
   }
 });
+
+
+// ======= 프로필의 prev_credit_score을 현재 credit_score로 복사하는 함수 =======
+async function updatePrevCreditScores() {
+  try {
+    // 1) 모든 사용자 프로필에서 id와 현재 credit_score를 가져온다
+    const { data: profiles, error: selectError } = await supabase
+      .from('profiles')
+      .select('id, credit_score');
+    if (selectError) {
+      console.error('[updatePrevCreditScores] 프로필 조회 실패:', selectError);
+      return;
+    }
+
+    // 2) 가져온 프로필들을 순회하며 prev_credit_score을 업데이트
+    for (const prof of profiles) {
+      const newPrev = prof.credit_score ?? 0;
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ prev_credit_score: newPrev, updated_at: new Date().toISOString() })
+        .eq('id', prof.id);
+
+      if (updateError) {
+        console.error(
+          `[updatePrevCreditScores] 사용자(${prof.id}) prev_credit_score 업데이트 실패:`,
+          updateError
+        );
+      }
+    }
+
+    console.log(
+      `[updatePrevCreditScores] 완료 - 총 ${profiles.length}개 프로필 prev_credit_score 갱신`
+    );
+  } catch (err) {
+    console.error('[updatePrevCreditScores] 예외 발생:', err);
+  }
+}
 
 // 마지막에만 index.html 반환 (SPA 대응용)
 app.get('*', function (req, res) {
