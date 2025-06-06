@@ -1,13 +1,16 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import Footer from "../../components/Footer";
+import tossLogo from "../../assets/toss.png";
+import kakaopayLogo from "../../assets/kakaopay.png";
+import shcLogo from "../../assets/shc.png";
 
 const Partners = () => {
   const partners = [
     {
       id: 1,
       name: "신한은행",
-      logo: "https://github-production-user-asset-6210df.s3.amazonaws.com/55532956/452190476-156bf60f-3cff-4a21-b8dd-feeed29efd27.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250606%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250606T070309Z&X-Amz-Expires=300&X-Amz-Signature=ccbc7131e9d5b1ee65047d0c7cd360c3869387a0425fd26734f60583b1116724&X-Amz-SignedHeaders=host",
+      logo: shcLogo,
       description: "국내 최고의 금융 서비스와 함께하는 신한은행과의 제휴를 준비 중입니다.",
       category: "은행",
       expectedDate: "2026년 하반기"
@@ -15,7 +18,7 @@ const Partners = () => {
     {
       id: 2,
       name: "카카오페이",
-      logo: "https://github-production-user-asset-6210df.s3.amazonaws.com/55532956/452191528-b56f9dbe-490b-4427-9b46-78316a8fd23f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250606%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250606T070247Z&X-Amz-Expires=300&X-Amz-Signature=65df3220b6f98dfd0c95b4f9dd8713b18e55de24ce5d87368a3c459641dab026&X-Amz-SignedHeaders=host",
+      logo: kakaopayLogo,
       description: "편리한 결제 서비스로 유명한 카카오페이와의 제휴를 준비 중입니다.",
       category: "결제",
       expectedDate: "2026년 하반기"
@@ -23,7 +26,7 @@ const Partners = () => {
     {
       id: 3,
       name: "토스",
-      logo: "https://github-production-user-asset-6210df.s3.amazonaws.com/55532956/452191864-45988c95-3b9e-4c63-a745-2a52a7e708e4.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250606%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250606T070535Z&X-Amz-Expires=300&X-Amz-Signature=7e5b5fe5671deb5a76d7236918e1cf5926f72dc26790cccbe3d63c320f804979&X-Amz-SignedHeaders=host",
+      logo: tossLogo,
       description: "혁신적인 금융 서비스를 제공하는 토스와의 제휴를 준비 중입니다.",
       category: "핀테크",
       expectedDate: "2026년 하반기"

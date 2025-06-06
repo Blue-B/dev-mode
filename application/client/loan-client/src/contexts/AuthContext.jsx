@@ -87,6 +87,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    supabase,
     signIn: async (email, password) => {
       try {
         console.log('이메일 로그인 시도:', email);
