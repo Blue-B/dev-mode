@@ -9,12 +9,21 @@ import logo from "../assets/logo2.png";
 const Header = () => {
   const location = useLocation();
   const { user } = useAuth();
-  const isPublicPage = ["/", "/login", "/signup", "/service-intro", "/question", "/service-method", "/inquiry", "/ensuring-stability"].includes(location.pathname);
+  const isPublicPage = ["/", "/login", "/signup", "/service-intro", "/question", "/service-method", "/inquiry", "/ensuring-stability", "/blog", "/partners", "/careers", "/privacy", "/terms"].includes(location.pathname);
   const [showNavSmall, setShowNavSmall] = useState(false);
 
   const toggleNav = () => {
     setShowNavSmall(!showNavSmall);
   };
+
+  const menuItems = [
+    { name: "서비스 소개", path: "/service-intro" },
+    { name: "블로그", path: "/blog" },
+    { name: "제휴사", path: "/partners" },
+    { name: "채용", path: "/careers" },
+    { name: "이용약관", path: "/terms" },
+    { name: "개인정보처리방침", path: "/privacy" }
+  ];
 
   return (
     <header className="relative flex items-center px-4 py-3 bg-white border-b border-gray-200 md:px-8">
@@ -28,11 +37,9 @@ const Header = () => {
       {isPublicPage && (
         <>
           <nav className="hidden md:flex items-center space-x-8 text-sm text-gray-700 ml-12">
-            <NavLink to="/service-intro" className="hover:text-blue-500">서비스 소개</NavLink>
-            <NavLink to="/inquiry" className="hover:text-blue-500">문의하기</NavLink>
-            <NavLink to="/blog" className="hover:text-blue-500">블로그</NavLink>
-            <NavLink to="/partners" className="hover:text-blue-500">제휴사</NavLink>
-            <NavLink to="/careers" className="hover:text-blue-500">채용</NavLink>
+            {menuItems.map((item) => (
+              <NavLink key={item.path} to={item.path} className="hover:text-blue-500">{item.name}</NavLink>
+            ))}
           </nav>
 
           <div className="flex items-center justify-center space-x-3 ml-auto">

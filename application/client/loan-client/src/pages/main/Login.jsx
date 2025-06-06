@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { createClient } from "@supabase/supabase-js";
+import { motion } from "framer-motion";
+import { useAuth } from "../../contexts/AuthContext";
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
 const Login = () => {

@@ -12,6 +12,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom'; 
 import { HandHeart } from 'lucide-react';
+import { motion } from "framer-motion";
+import Footer from "../components/Footer";
 
 // 금액을 한글 단위로 변환하는 유틸리티 함수
 const formatAmount = (amount) => {
@@ -103,15 +105,15 @@ const Dashboard = () => {
         fetchProfile();
     }, [user?.id]);
 
-    // 3) “내가 빌린(= borrower) 대출들” 필터링
+    // 3) "내가 빌린(= borrower) 대출들" 필터링
     const borrowedLoans = useMemo(() => {
         if (!walletAddress || !Array.isArray(loans)) return [];
         return loans.filter(loan => loan.borrower === walletAddress);
     }, [walletAddress, loans]);
 
-    // 4) “지난 12개월” 기간에 해당하는 대출 중에서,
-    // - 총 “내가 빌린” 대출 건수
-    // - 그 중 ‘Repaid’ 상태인 건수
+    // 4) "지난 12개월" 기간에 해당하는 대출 중에서,
+    // - 총 "내가 빌린" 대출 건수
+    // - 그 중 'Repaid' 상태인 건수
     // 로 상환율을 계산합니다.
     const repaymentRateInfo = useMemo(() => {
         if (!borrowedLoans.length) {
@@ -123,20 +125,20 @@ const Dashboard = () => {
         const nowMs = Date.now();
         const oneYearAgoMs = nowMs - ONE_YEAR_MS;
 
-        // ‘startTime’ 혹은 ‘created_at’ 등, 언제 빌린 대출인지 확인 가능한 필드가 필요합니다.
-        // 여기서는 체인코드에서 채워주는 ‘startTime’(초 단위 UNIX) 을 사용한다고 가정:
+        // 'startTime' 혹은 'created_at' 등, 언제 빌린 대출인지 확인 가능한 필드가 필요합니다.
+        // 여기서는 체인코드에서 채워주는 'startTime'(초 단위 UNIX) 을 사용한다고 가정:
         // => 자바스크립트 millisecond 단위로 비교하려면 startTime * 1000 해야 합니다.
 
         let countTotal = 0;
         let countRepaid = 0;
 
         borrowedLoans.forEach(loan => {
-        // 1) “내가 빌린” 대출이 “지난 12개월” 이내에 시작된 것인지 확인
+        // 1) "내가 빌린" 대출이 "지난 12개월" 이내에 시작된 것인지 확인
         //    (loan.startTime: 초 단위 UNIX)
         const loanStartMs = Number(loan.startTime) * 1000;
         if (loanStartMs >= oneYearAgoMs) {
             countTotal += 1;
-            // 2) status가 ‘Repaid’인 경우만 countRepaid 증가
+            // 2) status가 'Repaid'인 경우만 countRepaid 증가
             if (loan.status.toLowerCase() === 'repaid') {
             countRepaid += 1;
             }

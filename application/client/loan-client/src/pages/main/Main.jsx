@@ -1,17 +1,15 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { FaUsers, FaBolt } from "react-icons/fa";
-import mrbannerImage from "../assets/mrbanner.png";
-import mlbannerImage from "../assets/mlbanner.png";
-import Header from "../components/Header";
+import mrbannerImage from "../../assets/mrbanner.png";
+import mlbannerImage from "../../assets/mlbanner.png";
+import Footer from "../../components/Footer";
 
 const Main = () => {
   const [loanAmount, setLoanAmount] = useState("");
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Header />
-
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
       <section className="relative text-white py-24 bg-[url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')] bg-cover bg-center">
         <div className="absolute inset-0 bg-black opacity-70"></div>
@@ -103,43 +101,7 @@ const Main = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-50 py-12 mt-12">
-        <div className="container mx-auto px-4 md:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="font-semibold mb-4">깐부 대출</h4>
-              <p className="text-sm text-gray-600">안전하고 빠른 P2P 대출 플랫폼</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-4">서비스</h4>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li><NavLink to="#" className="hover:text-blue-500">대출 신청</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">홈 이용</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">이용 안내</NavLink></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-4">고객센터</h4>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li><NavLink to="#" className="hover:text-blue-500">자주 묻는 질문</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">1:1 문의</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">공지사항</NavLink></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-4">회사 정보</h4>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li><NavLink to="#" className="hover:text-blue-500">회사 소개</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">이용약관</NavLink></li>
-                <li><NavLink to="#" className="hover:text-blue-500">개인정보처리방침</NavLink></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };
