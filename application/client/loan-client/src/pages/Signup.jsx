@@ -155,51 +155,10 @@ const Signup = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    if (name === 'birthDate') {
-      // 생년월일 입력 처리
-      const [year, month, day] = value.split('-').map(Number);
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const minYear = currentYear - 100; // 최소 연도 (현재 연도 - 100년)
-      
-      // 연도 범위 조정
-      let adjustedYear = year;
-      if (year > currentYear) {
-        adjustedYear = currentYear;
-      } else if (year < minYear) {
-        adjustedYear = minYear;
-      }
-      
-      // 월 범위 조정 (1-12)
-      let adjustedMonth = month;
-      if (month > 12) {
-        adjustedMonth = 12;
-      } else if (month < 1) {
-        adjustedMonth = 1;
-      }
-      
-      // 일 범위 조정 (해당 월의 마지막 날짜까지)
-      const lastDayOfMonth = new Date(adjustedYear, adjustedMonth, 0).getDate();
-      let adjustedDay = day;
-      if (day > lastDayOfMonth) {
-        adjustedDay = lastDayOfMonth;
-      } else if (day < 1) {
-        adjustedDay = 1;
-      }
-      
-      // 조정된 날짜를 YYYY-MM-DD 형식으로 변환
-      const adjustedDate = `${adjustedYear}-${String(adjustedMonth).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
-      
-      setFormData(prev => ({
-        ...prev,
-        [name]: adjustedDate
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     
     // 이메일이 변경되면 이메일 확인 상태 초기화
     if (name === 'email') {
@@ -681,6 +640,7 @@ const Signup = () => {
                 <label className="block text-left text-gray-600 mb-1">생년월일</label>
                 <input
                   type="date"
+                  name="birthDate"
                   value={formData.birthDate}
                   onChange={handleChange}
                   className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
