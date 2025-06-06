@@ -100,16 +100,6 @@ export default function LoanAgreement({
     window.history.back();
   };
   
-  const handleSign = () => {
-    setCurrentSigner('borrower');
-    setShowSignatureModal(true);
-  };
-
-  const handleLenderSign = () => {
-    setCurrentSigner('lender');
-    setShowSignatureModal(true);
-  };
-
   const handleDocumentClick = () => {
     setShowDetailedContract(true);
   };
@@ -126,7 +116,6 @@ export default function LoanAgreement({
   };
      // 대출 요청 생성
   const handleSendLoan = async () => {
-
     if (isRequesting) return; // 중복 요청 방지 (중요!)
 
     setIsRequesting(true); // 요청 시작 시 상태 업데이트
@@ -200,38 +189,25 @@ export default function LoanAgreement({
             {/* Document Preview Section */}
             <div className="px-6 pb-2">
               <div className="relative p-4 mb-4 rounded-lg bg-gray-50 contract-preview">
-                {/* Document Icon with Blue Stamp */}
                 <div className="flex justify-center mb-4">
                   <div className="relative cursor-pointer" onClick={handleDocumentClick}>
-                    {/* White document paper */}
                     <div className="flex flex-col justify-between w-24 h-32 p-2 bg-white border border-gray-200 rounded-sm shadow-sm">
-                      {/* Top text lines */}
                       <div className="space-y-1">
                         <div className="h-0.5 bg-gray-300 rounded w-3/4"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-full"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-1/2"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-2/3"></div>
                       </div>
-                      {/* Bottom text lines */}
                       <div className="space-y-1">
                         <div className="h-0.5 bg-gray-300 rounded w-2/3"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-full"></div>
                         <div className="h-0.5 bg-gray-300 rounded w-3/4"></div>
                       </div>
                     </div>
-                    {/* Blue circular stamp with document icon */}
                     <div className="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
                       <div className="flex items-center justify-center w-10 h-10 bg-blue-500 rounded-full">
                         <FileText className="w-5 h-5 text-white" />
                       </div>
-                    </div>
-                    {/* Signature line - positioned at bottom right of document */}
-                    <div className="absolute font-serif text-xs italic text-gray-400 bottom-1 right-1">
-                      {signatures.lender ? (
-                        <img src={signatures.lender} alt="서명" className="h-4" />
-                      ) : (
-                        contractData.borrowerName
-                      )}
                     </div>
                   </div>
                 </div>
@@ -257,10 +233,6 @@ export default function LoanAgreement({
                         <span className="text-gray-600">연락처</span>
                         <span className="text-right text-gray-900">{contractData.lenderPhone}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600"></span>
-                        <span className="text-right text-gray-900"></span>
-                      </div>
                     </div>
                   </div>
                   
@@ -279,10 +251,6 @@ export default function LoanAgreement({
                       <div className="flex justify-between">
                         <span className="text-gray-600">연락처</span>
                         <span className="text-right text-gray-900">{contractData.borrowerPhone}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600"></span>
-                        <span className="text-right text-gray-900"></span>
                       </div>
                     </div>
                   </div>
@@ -308,24 +276,6 @@ export default function LoanAgreement({
                       <span className="font-medium text-gray-900">계약이체</span>
                     </div>
                   </div>
-                </div>
-                
-                {/* Action Buttons */}
-                <div className="flex justify-center gap-2 pt-2">
-                  <button 
-                    onClick={handleLenderSign}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    채권자 서명
-                  </button>
-                  <button 
-                    onClick={handleSign}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    채무자 서명
-                  </button>
                 </div>
                 
                 {/* Legal Notice */}

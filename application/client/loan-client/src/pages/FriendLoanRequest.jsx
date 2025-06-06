@@ -112,7 +112,7 @@ export default function FriendLoanRequest() {
     }, interval);
   };
   
-  // 오늘 기준으로 “n개월 뒤” 계산한 문자열 (UI에 표시할 때도 사용 가능)
+  // 오늘 기준으로 "n개월 뒤" 계산한 문자열 (UI에 표시할 때도 사용 가능)
   useEffect(() => {
       if (loanTermMonths > 0) {
         // date-fns의 addMonths 사용 → 말일/윤달을 올바르게 처리
@@ -271,7 +271,7 @@ export default function FriendLoanRequest() {
       setLoanAgreementData({
         loanData: loanData,
         selectedFriend: selectedFriend,
-        estimatedRepaymentDate: formattedEndDate,        // “YYYY. M. D.” 또는 “yyyy년 M월 d일”
+        estimatedRepaymentDate: formattedEndDate,        // "YYYY. M. D." 또는 "yyyy년 M월 d일"
         totalRepayment: calculateTotalRepayment(),
         startDate: formattedToday,
         endDate: formattedEndDate
@@ -732,7 +732,6 @@ export default function FriendLoanRequest() {
             goToNextStep={() => setCurrentStep(4)}
           />
         )}
-
 
         {/* Step 4: Request Submission (Placeholder) */}
         {currentStep === 4 && (
