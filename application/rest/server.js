@@ -263,36 +263,6 @@ function getKoreanTime() {
 }
 
 // 대출 요청 생성
-// app.post('/createLoan', async function (req, res) {
-//   const { id, lender, borrower, amount, durationDays, interestRate, contractImage } = req.body;
-//   const args = [id, lender, borrower, amount, durationDays, interestRate];
-
-//   try {
-//     const txId = await sdk.send(false, 'CreateLoanRequest', args); // txId 반환됨
-
-//     // 체인 호출 성공 → Supabase에 해시 정보만 저장
-//     const { error } = await supabase.from('loans').insert([{
-//       id: id,                    // 체인에 저장한 loan ID를 그대로 사용
-//       loan_chain_id: id,         // 체인에 저장한 loan ID
-//       tx_hash: txId,             // 블록체인 트랜잭션 ID
-//       created_at: getKoreanTime() // 한국 시간으로 저장
-//     }]);
-
-//     if (error) {
-//       console.error('❌ DB 저장 실패:', error);
-//       return res.status(500).json({ error: 'DB 저장 실패' });
-//     }
-
-//     return res.json({ 
-//       message: 'Loan created on chain and DB', 
-//       txId
-//     });
-
-//   } catch (err) {
-//     console.error('❌ 체인 오류:', err.message);
-//     return res.status(500).json({ error: err.message });
-//   }
-// });
 app.post('/createLoan', async function (req, res) {
   const { id, lender, borrower, amount, durationDays, interestRate } = req.body;
   // └─ lender, borrower: “프로필”이 아니라 지갑 주소(예: 'wallet_xyz')라고 가정

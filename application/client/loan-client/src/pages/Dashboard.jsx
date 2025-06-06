@@ -6,16 +6,12 @@ import {
     denyLoan,
     queryMyLoans,
     repayLoan,
-    fetchAcceptedFriendsWithWallets
+    fetchAcceptedFriendsWithWallets,
+    getUserProfile
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom'; 
 import { HandHeart } from 'lucide-react';
-
-// 1개월 ~ 60개월까지 반복 생성
-const durationOptions = Array.from({
-    length: 60
-}, (_, i) => i + 1);
 
 // 금액을 한글 단위로 변환하는 유틸리티 함수
 const formatAmount = (amount) => {
@@ -39,6 +35,8 @@ const Dashboard = () => {
 
     const [loadingWallet, setLoadingWallet] = useState(true);
 
+    const [creditScore, setCreditScore] = useState(null); 
+    
     const {user} = useAuth();
     const navigate = useNavigate();
 
@@ -90,6 +88,68 @@ const Dashboard = () => {
         }
     , [walletAddress]);
 
+    // 유저 프로필에서 신용점수 가져오기
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (!user?.id) return;
+            try {
+                const profile = await getUserProfile(user.id);
+                
+                setCreditScore(profile.creditScore ?? 0);
+            } catch (err) {
+                console.error('프로필 조회 실패:', err.message);
+            }
+        };
+        fetchProfile();
+    }, [user?.id]);
+
+    // 3) “내가 빌린(= borrower) 대출들” 필터링
+    const borrowedLoans = useMemo(() => {
+        if (!walletAddress || !Array.isArray(loans)) return [];
+        return loans.filter(loan => loan.borrower === walletAddress);
+    }, [walletAddress, loans]);
+
+    // 4) “지난 12개월” 기간에 해당하는 대출 중에서,
+    // - 총 “내가 빌린” 대출 건수
+    // - 그 중 ‘Repaid’ 상태인 건수
+    // 로 상환율을 계산합니다.
+    const repaymentRateInfo = useMemo(() => {
+        if (!borrowedLoans.length) {
+        return { rate: 0, countTotal: 0, countRepaid: 0 };
+        }
+
+        // 현재 시간 기준으로 12개월 전(365일 전) 타임스탬프 구하기
+        const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
+        const nowMs = Date.now();
+        const oneYearAgoMs = nowMs - ONE_YEAR_MS;
+
+        // ‘startTime’ 혹은 ‘created_at’ 등, 언제 빌린 대출인지 확인 가능한 필드가 필요합니다.
+        // 여기서는 체인코드에서 채워주는 ‘startTime’(초 단위 UNIX) 을 사용한다고 가정:
+        // => 자바스크립트 millisecond 단위로 비교하려면 startTime * 1000 해야 합니다.
+
+        let countTotal = 0;
+        let countRepaid = 0;
+
+        borrowedLoans.forEach(loan => {
+        // 1) “내가 빌린” 대출이 “지난 12개월” 이내에 시작된 것인지 확인
+        //    (loan.startTime: 초 단위 UNIX)
+        const loanStartMs = Number(loan.startTime) * 1000;
+        if (loanStartMs >= oneYearAgoMs) {
+            countTotal += 1;
+            // 2) status가 ‘Repaid’인 경우만 countRepaid 증가
+            if (loan.status.toLowerCase() === 'repaid') {
+            countRepaid += 1;
+            }
+        }
+        });
+
+        const rate = countTotal > 0
+        ? Math.round((countRepaid / countTotal) * 100)
+        : 0;
+
+        return { rate, countTotal, countRepaid };
+    }, [borrowedLoans]);
+
     // useMemo: wallet_id → profile 객체 매핑
     const profileMap = useMemo(() => {
         return friendWallets.reduce((acc, profile) => {
@@ -118,6 +178,8 @@ const Dashboard = () => {
         try {
             await approveLoan(loanId);
             alert('대출이 승인되었습니다!');
+            // 체인에서 상태가 Active로 확정될 시간을 약간 더 기다리기 (여유 분 1~2초 정도)
+            await new Promise(resolve => setTimeout(resolve, 1500));
             await loadMyLoans();
         } catch (error) {
             console.error('대출 승인 실패:', error);
@@ -177,9 +239,11 @@ const Dashboard = () => {
                     <p className="mb-1 text-sm text-gray-500">신용 점수</p>
                     <div className="flex items-baseline">
                         <p className="text-2xl font-bold sm:text-3xl whitespace-nowrap">
-                            850
+                            {creditScore}
                         </p>
-                        <span className="ml-2 text-sm text-green-500 sm:text-base">▲2.5%</span>
+                        <span className="ml-2 text-sm text-green-500 sm:text-base">
+                            {creditScore > 0 ? `▲${(creditScore / 1000 * 100).toFixed(1)}%` : ''}
+                        </span>
                     </div>
                 </div>
 
@@ -198,8 +262,7 @@ const Dashboard = () => {
                 {/* 대출 상환율 카드 */}
                 <div className="p-4 bg-white border shadow-sm sm:p-6 rounded-xl">
                     <p className="mb-1 text-sm text-gray-500">대출 상환율</p>
-                    <p className="mb-1 text-2xl font-bold sm:text-3xl">98%</p>
-                    <p className="text-xs text-gray-400">지난 12개월</p>
+                    <p className="mb-1 text-2xl font-bold sm:text-3xl">{repaymentRateInfo.rate}%</p>                    <p className="text-xs text-gray-400">지난 12개월</p>
                 </div>
 
                 {/* 잔액 카드 */}
