@@ -37,8 +37,9 @@ const Dashboard = () => {
 
     const [loadingWallet, setLoadingWallet] = useState(true);
 
-    const [creditScore, setCreditScore] = useState(null); 
-    
+    const [creditScore, setCreditScore] = useState(null);  // 신용점수
+    const [prevScore, setPrevScore] = useState(0);           // 한 달 전 점수
+
     const {user} = useAuth();
     const navigate = useNavigate();
 
@@ -97,13 +98,24 @@ const Dashboard = () => {
             try {
                 const profile = await getUserProfile(user.id);
                 
-                setCreditScore(profile.creditScore ?? 0);
+                setCreditScore(profile.credit_score ?? 0);
+                setPrevScore(profile.prev_credit_score ?? 0);
+
             } catch (err) {
                 console.error('프로필 조회 실패:', err.message);
             }
         };
         fetchProfile();
     }, [user?.id]);
+    // ** 지난 기간 대비 변화량 계산 **
+    const { delta, label } = useMemo(() => {
+        const diff = creditScore - prevScore;
+        let sign = '';
+        if (diff > 0) sign = '▲';
+        else if (diff < 0) sign = '▼';
+        const txt = diff !== 0 ? `${sign}${Math.abs(diff)}점` : '-';
+        return { delta: diff, label: txt };
+    }, [creditScore, prevScore]);
 
     // 3) "내가 빌린(= borrower) 대출들" 필터링
     const borrowedLoans = useMemo(() => {
@@ -183,6 +195,7 @@ const Dashboard = () => {
             // 체인에서 상태가 Active로 확정될 시간을 약간 더 기다리기 (여유 분 1~2초 정도)
             await new Promise(resolve => setTimeout(resolve, 1500));
             await loadMyLoans();
+            fetchBalance();
         } catch (error) {
             console.error('대출 승인 실패:', error);
             alert('대출 승인 실패: ' + (
@@ -243,8 +256,8 @@ const Dashboard = () => {
                         <p className="text-2xl font-bold sm:text-3xl whitespace-nowrap">
                             {creditScore}
                         </p>
-                        <span className="ml-2 text-sm text-green-500 sm:text-base">
-                            {creditScore > 0 ? `▲${(creditScore / 1000 * 100).toFixed(1)}%` : ''}
+                        <span className={`ml-2 text-sm ${delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : 'text-gray-400'} sm:text-base`}>
+                            {label}
                         </span>
                     </div>
                 </div>
