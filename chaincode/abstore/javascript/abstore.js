@@ -133,7 +133,7 @@ const LoanShim = class {
     const borrower = args[2];
     const amount = parseInt(args[3], 10);
     const durationDays = parseInt(args[4], 10);
-    const interestRate = parseInt(args[5], 10);
+    const interestRate = parseFloat(args[5]);
 
     if (isNaN(amount) || isNaN(durationDays) || isNaN(interestRate)) {
       throw new Error('Amount, durationDays, interestRate must be integers');
@@ -723,7 +723,7 @@ const LoanShim = class {
     const [id, name, minDepositStr, interestRateStr, durationMonthsStr, creatorAddress, initialDepositStr] = args;
 
     const minDeposit = parseInt(minDepositStr, 10);
-    const interestRate = parseInt(interestRateStr, 10);
+    const interestRate = parseFloat(interestRateStr);
     const durationMonths = parseInt(durationMonthsStr, 10);
     const initialDeposit = parseInt(initialDepositStr, 10);
 

@@ -308,7 +308,7 @@ app.post('/createLoan', async function (req, res) {
         lender_id:      lenderId,        // profiles.id(UUID)
         borrower_id:    borrowerId,      // profiles.id(UUID)
         amount:         Number(amount),  // 숫자로 저장
-        interest_rate:  Number(interestRate),
+        interest_rate:  parseFloat(interestRate).toFixed(2),
         duration_days:  Number(durationDays),
         status:         'pending',       // 최초 생성 시점엔 대출 승인 전이므로 ‘pending’
         created_at:     now
