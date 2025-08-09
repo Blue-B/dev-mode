@@ -33,3 +33,5 @@ explorer/wallet/
 .env
 /home/ubuntu/go/src/dev-mode/application/rest/.env
 /home/ubuntu/go/src/dev-mode/application/client/loan-client/.env
+
+/docs

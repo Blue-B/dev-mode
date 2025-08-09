@@ -16,7 +16,7 @@ const api = axios.create({
   },
 });
 
-// 요청 인터셉터 추가
+// 요청 인터셉터: 모든 요청에 Supabase JWT를 자동으로 추가합니다.
 api.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.access_token) {
@@ -25,11 +25,12 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// 지갑 관련 API
+// --- 지갑 관련 API ---
+
 /**
- * Supabase에서 로그인 유저의 wallet_id를 조회하는 함수
- * @param {string} userId Supabase auth.users.id
- * @returns {Promise<string>} wallet_id
+ * Supabase에서 로그인 유저의 wallet_id를 조회합니다.
+ * @param {string} userId - Supabase auth.users.id
+ * @returns {Promise<string>} 사용자의 지갑 주소(wallet_id)
  */
 export const getUserWalletAddress = async (userId) => {
   const { data, error } = await supabase
@@ -43,7 +44,11 @@ export const getUserWalletAddress = async (userId) => {
   return data.wallet_id;
 };
 
-// POST 방식으로 변경
+/**
+ * 사용자의 지갑을 생성합니다. (서버 경유 -> 체인코드 호출)
+ * @param {string} userId - 지갑을 생성할 사용자의 UUID
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const createWallet = async (userId) => {
   try {
     const response = await api.post('/wallet/create', { userId });
@@ -54,6 +59,11 @@ export const createWallet = async (userId) => {
   }
 };
 
+/**
+ * 특정 지갑 주소의 잔액을 조회합니다.
+ * @param {string} address - 잔액을 조회할 지갑 주소
+ * @returns {Promise<object>} 체인코드에서 반환된 잔액 정보
+ */
 export const getWalletBalance = async (address) => {
   try {
     const response = await api.get(`/getWalletBalance?address=${address}`);
@@ -64,14 +74,26 @@ export const getWalletBalance = async (address) => {
   }
 };
 
-// 대출 관련 API
+// --- P2P 대출 관련 API ---
+
+/**
+ * 새로운 P2P 대출을 생성하고 계약서를 저장합니다.
+ * @param {object} loanData - 대출 데이터 객체
+ * @param {string} loanData.id - 대출 고유 ID
+ * @param {string} loanData.lender - 채권자 지갑 주소
+ * @param {string} loanData.borrower - 채무자 지갑 주소
+ * @param {number} loanData.amount - 대출 원금
+ * @param {number} loanData.durationDays - 대출 기간(일)
+ * @param {number} loanData.interestRate - 이자율
+ * @param {string} loanData.contractImage - Base64로 인코딩된 계약서 이미지
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const createLoan = async (loanData) => {
   try {
     if (!loanData.contractImage) {
       throw new Error('계약서 이미지가 필요합니다.');
     }
 
-    // 1. 대출 생성
     const response = await api.post('/createLoan', {
       id: loanData.id,
       lender: loanData.lender,
@@ -81,7 +103,6 @@ export const createLoan = async (loanData) => {
       interestRate: loanData.interestRate
     });
 
-    // 2. 계약서 다운로드 및 해시 저장
     await downloadAndSaveContract(loanData.id, loanData.contractImage);
 
     return {
@@ -94,6 +115,11 @@ export const createLoan = async (loanData) => {
   }
 };
 
+/**
+ * P2P 대출을 승인합니다.
+ * @param {string} loanId - 승인할 대출의 ID
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const approveLoan = async (loanId) => {
   try {
     const response = await api.get(`/approveLoan?id=${loanId}`);
@@ -104,6 +130,11 @@ export const approveLoan = async (loanId) => {
   }
 };
 
+/**
+ * P2P 대출을 거절합니다.
+ * @param {string} loanId - 거절할 대출의 ID
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const denyLoan = async (loanId) => {
   try {
     const response = await api.get(`/denyLoan?id=${loanId}`);
@@ -114,7 +145,11 @@ export const denyLoan = async (loanId) => {
   }
 };
 
-// 개인 대출 상환
+/**
+ * P2P 대출금을 상환합니다.
+ * @param {string} loanId - 상환할 대출의 ID
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const repayLoan = async (loanId) => {
   try {
     const response = await api.post('/loan/repay', { loanId }); 
@@ -125,6 +160,11 @@ export const repayLoan = async (loanId) => {
   }
 };
 
+/**
+ * 특정 P2P 대출 정보를 조회합니다.
+ * @param {string} id - 조회할 대출의 ID
+ * @returns {Promise<object>} 대출 상세 정보
+ */
 export const queryLoan = async (id) => {
     try {
         const response = await api.get(`/queryLoan?id=${id}`);
@@ -134,6 +174,10 @@ export const queryLoan = async (id) => {
     }
 };
 
+/**
+ * 체인코드에 기록된 모든 P2P 대출 목록을 조회합니다.
+ * @returns {Promise<Array<object>>} 전체 대출 목록
+ */
 export const queryAllLoans = async () => {
   try {
     const response = await api.get('/queryAllLoans');
@@ -144,6 +188,11 @@ export const queryAllLoans = async () => {
   }
 }; 
 
+/**
+ * 특정 지갑 주소와 관련된 모든 P2P 대출 목록을 조회합니다.
+ * @param {string} walletAddress - 사용자의 지갑 주소
+ * @returns {Promise<Array<object>>} 나의 대출 목록
+ */
 export const queryMyLoans = async (walletAddress) => {
   try {
     const response = await api.get(`/myLoans?wallet=${walletAddress}`);
@@ -154,11 +203,16 @@ export const queryMyLoans = async (walletAddress) => {
   }
 };
 
-// 대출풀 관련 API (api 인스턴스 사용)
+// --- 대출 풀 관련 API ---
+
+/**
+ * 새로운 대출 풀을 생성합니다.
+ * @param {object} poolData - 생성할 대출 풀의 데이터
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const createPool = async (poolData) => {
   try {
     const response = await api.post('/createPool', poolData);
-
     return response.data;
   } catch (error) {
     console.error('대출풀 생성 실패:', error);
@@ -166,6 +220,11 @@ export const createPool = async (poolData) => {
   }
 };
 
+/**
+ * 특정 대출 풀 정보를 조회합니다.
+ * @param {string} id - 조회할 풀의 ID
+ * @returns {Promise<object>} 풀 상세 정보
+ */
 export const queryPool = async (id) => {
   try {
     const response = await api.get(`/queryPool?id=${id}`);
@@ -176,17 +235,18 @@ export const queryPool = async (id) => {
   }
 };
 
+/**
+ * 모든 대출 풀 목록을 조회합니다.
+ * @returns {Promise<Array<object>>} 전체 풀 목록
+ */
 export const queryAllPools = async () => {
   try {
     const response = await api.get('/queryAllPools');
-
-    // 🔧 participants와 weights를 보정
     const fixedData = (Array.isArray(response.data) ? response.data : response.data.result).map(pool => ({
       ...pool,
       participants: Array.isArray(pool.participants) ? pool.participants : [],
       weights: typeof pool.weights === 'object' && pool.weights !== null ? pool.weights : {},
     }));
-
     return fixedData;
   } catch (error) {
     console.error('전체 풀 조회 실패:', error);
@@ -194,6 +254,14 @@ export const queryAllPools = async () => {
   }
 };
 
+/**
+ * 대출 풀에 참여(자금 예치)합니다.
+ * @param {object} data - 참여 정보
+ * @param {string} data.poolID - 참여할 풀의 ID
+ * @param {string} data.userAddress - 참여자 지갑 주소
+ * @param {number} data.deposit - 예치할 금액
+ * @returns {Promise<object>} 서버 응답 객체
+ */
 export const joinPool = async ({ poolID, userAddress, deposit }) => {
   try {
     const response = await api.post('/joinPool', { poolID, userAddress, deposit });
@@ -204,8 +272,11 @@ export const joinPool = async ({ poolID, userAddress, deposit }) => {
   }
 };
 
+// --- 사용자 및 프로필 API (Supabase 직접 호출) ---
+
 /**
- * 현재 로그인된 유저 정보 가져오기
+ * 현재 로그인된 유저의 Supabase auth 정보를 가져옵니다.
+ * @returns {Promise<object>} Supabase 사용자 객체
  */
 export async function getCurrentUser() {
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -214,31 +285,34 @@ export async function getCurrentUser() {
 }
 
 /**
- * 프로필(지갑 주소 등) 가져오기
- * @param {string} userId
+ * 특정 사용자의 상세 프로필 정보를 Supabase에서 직접 가져옵니다.
+ * @param {string} userId - 조회할 사용자의 UUID
+ * @returns {Promise<object>} 사용자의 프로필 객체
  */
 export async function getUserProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')          // 프로필 테이블의 모든 칼럼 Fetch
+    .select('*')
     .eq('id', userId)
     .single();
   if (error) throw error;
-  return data;            // { id, name, phone, birth_number, gender, wallet_id, ... }
+  return data;
 }
 
-// 현재 로그인한 사용자의 친구 목록을 조회하고, 친구들의 프로필 중 wallet_id가 존재하는 친구만 상태에 저장
+/**
+ * 현재 사용자와 친구 관계이며 지갑이 있는 모든 친구 목록을 조회합니다.
+ * @param {string} userId - 현재 사용자의 UUID
+ * @returns {Promise<Array<object>>} 친구들의 프로필 객체 배열
+ */
 export const fetchAcceptedFriendsWithWallets = async (userId) => {
     if (!userId) return [];
 
-    // 1. 친구 요청 (내가 보낸 것)
     const { data: sent, error: sentError } = await supabase
         .from('friends')
         .select('friend_user_id')
         .eq('user_id', userId)
         .eq('status', 'accepted');
 
-    // 2. 친구 요청 (내가 받은 것)
     const { data: received, error: receivedError } = await supabase
         .from('friends')
         .select('user_id')
@@ -265,15 +339,16 @@ export const fetchAcceptedFriendsWithWallets = async (userId) => {
         throw new Error('친구 프로필 조회 실패');
     }
 
-    // wallet_id가 null이 아닌 친구들만 포함한 배열을 반환
     return profiles.filter(profile => profile.wallet_id);
 };
 
+// --- 친구 관계 API ---
+
 /**
- * 친구 추가 요청
- * - Express 서버: POST /api/friends/add
- * @param {string} userId
- * @param {string} friendEmail
+ * 다른 사용자에게 친구 추가를 요청합니다.
+ * @param {string} userId - 요청을 보내는 사용자의 UUID
+ * @param {string} friendEmail - 친구 요청을 받을 사용자의 이메일
+ * @returns {Promise<object>} 서버 응답 객체
  */
 export async function sendFriendRequest(userId, friendEmail) {
   try {
@@ -283,23 +358,16 @@ export async function sendFriendRequest(userId, friendEmail) {
     });
     return response.data;
   } catch (error) {
-   console.error('[app.js] sendFriendRequest 실패:', {
-      url: error.config.url,
-      method: error.config.method,
-      data: error.config.data,
-      responseData: error.response?.data,
-      responseStatus: error.response?.status,
-    });
+   console.error('[app.js] sendFriendRequest 실패:', error.response?.data || error.message);
     throw error;
   }
 }
 
 /**
- * 친구 목록 조회
- * - Express 서버: GET /api/friends
- * @param {string} userId
+ * 현재 사용자의 친구 목록을 조회합니다.
+ * @returns {Promise<Array<object>>} 친구 목록
  */
-export async function getFriendList(userId) {
+export async function getFriendList() {
   try {
     const response = await api.get('/api/friends');
     return response.data.friends || [];
@@ -310,9 +378,8 @@ export async function getFriendList(userId) {
 }
 
 /**
- * 받은 친구 요청 조회
- * - Express 서버: GET /api/friends/received
- * @param {string} userId
+ * 받은 친구 요청 목록을 조회합니다.
+ * @returns {Promise<Array<object>>} 받은 친구 요청 목록
  */
 export async function getReceivedRequests() {
   try {
@@ -324,12 +391,11 @@ export async function getReceivedRequests() {
   }
 }
 
-
 /**
- * 친구 요청 수락/거절
- * - Express 서버: PATCH /api/friends/request
- * @param {string} requestId
- * @param {boolean} accept
+ * 친구 요청을 수락 또는 거절합니다.
+ * @param {string} requestId - 처리할 친구 요청의 ID (friends 테이블의 PK)
+ * @param {boolean} [accept=true] - 수락 여부 (기본값: true)
+ * @returns {Promise<object>} 서버 응답 객체
  */
 export async function handleFriendRequest(requestId, accept = true) {
   try {
@@ -344,7 +410,14 @@ export async function handleFriendRequest(requestId, accept = true) {
   }
 }
 
-// 계약서 해시 검증
+// --- 계약서 관련 API ---
+
+/**
+ * 계약서 이미지의 유효성을 검증합니다.
+ * @param {string} loanId - 대출 ID
+ * @param {string} contractImage - 검증할 계약서의 Base64 데이터
+ * @returns {Promise<object>} 검증 결과 객체
+ */
 export const verifyContract = async (loanId, contractImage) => {
   try {
     const response = await api.get('/api/contract/verify', {
@@ -358,7 +431,12 @@ export const verifyContract = async (loanId, contractImage) => {
   }
 };
 
-// 계약서 저장
+/**
+ * 계약서 이미지의 해시를 서버에 저장합니다.
+ * @param {string} loanId - 대출 ID
+ * @param {string} contractImage - 해시를 생성할 계약서의 Base64 데이터
+ * @returns {Promise<object>} 저장 결과 객체
+ */
 export const saveContract = async (loanId, contractImage) => {
   try {
     const response = await api.post('/api/contract/save', {
@@ -372,23 +450,23 @@ export const saveContract = async (loanId, contractImage) => {
   }
 };
 
-// 계약서 다운로드 및 해시 저장 (필수 단계)
+/**
+ * 계약서 해시를 서버에 저장하고, 사용자에게 파일을 다운로드해주는 필수 절차 함수입니다.
+ * @param {string} loanId - 대출 ID
+ * @param {string} contractImage - 계약서의 Base64 데이터
+ * @returns {Promise<object>} 성공 여부 및 해시값
+ */
 export const downloadAndSaveContract = async (loanId, contractImage) => {
   try {
     if (!contractImage) {
       throw new Error('계약서 이미지가 필요합니다.');
     }
 
-    // 1) 계약서 해시 저장 (서버 측 로직)
     const saveResult = await saveContract(loanId, contractImage);
     if (!saveResult.success) {
       throw new Error('계약서 해시 저장에 실패했습니다.');
     }
 
-    // -------------------------------------------------
-    // 2) Base64 Data URL → Blob 변환 (fetch 사용하지 않음)
-    // -------------------------------------------------
-    // dataURLToBlob 함수 정의(위 설명 참조)
     function dataURLToBlob(dataUrl) {
       const [header, base64Data] = dataUrl.split(',');
       const binaryString = atob(base64Data);
@@ -400,12 +478,8 @@ export const downloadAndSaveContract = async (loanId, contractImage) => {
       return new Blob([bytes], { type: 'image/png' });
     }
 
-    // contractImage가 "data:image/png;base64,..." 형태라고 가정
     const blob = dataURLToBlob(contractImage);
 
-    // -------------------------------------------------
-    // 3) Blob을 브라우저에서 다운로드
-    // -------------------------------------------------
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -426,11 +500,16 @@ export const downloadAndSaveContract = async (loanId, contractImage) => {
   }
 };
 
+// --- 기타 헬퍼 API ---
 
-// 내 대출 거래 기록 조회
+/**
+ * 사용자의 모든 대출 관련 거래(송금, 수신) 기록을 조회합니다.
+ * @param {string} userId - 조회할 사용자의 UUID
+ * @returns {Promise<Array<object>>} 거래 기록 배열
+ */
 export const getMyLoanTransactions = async (userId) => {
   try {
-    const response = await api.post('/myLoanTransactions', { userId }); // ✅ POST로 변경
+    const response = await api.post('/myLoanTransactions', { userId });
     return response.data.data;
   } catch (error) {
     console.error('내 대출 거래 기록 조회 실패:', error);
@@ -438,11 +517,14 @@ export const getMyLoanTransactions = async (userId) => {
   }
 };
 
-// 유저 이름 조회
+/**
+ * 사용자 ID로 이름을 조회합니다.
+ * @param {string} userId - 조회할 사용자의 UUID
+ * @returns {Promise<string>} 사용자 이름
+ */
 export const getNameById = async (userId) => {
   try {
     const res = await api.post('/getName', { userId });
-    console.log('[✅ getNameById 응답]', res.data);
     return res.data;
   } catch (err) {
     console.error('[❌ getNameById 실패]', err.response?.data || err.message);
@@ -450,11 +532,15 @@ export const getNameById = async (userId) => {
   }
 };
 
-// 이자율 상환기간 조회
+/**
+ * 대출 ID로 이자율과 기간을 조회합니다.
+ * @param {string} loanId - 조회할 대출의 ID
+ * @returns {Promise<object>} 이자율과 기간 정보 객체 { interest_rate, duration_days }
+ */
 export const getLoanMeta = async (loanId) => {
   try {
     const res = await api.post('/getLoanMeta', { loanId });
-    return res.data; // { interest_rate, duration_days }
+    return res.data;
   } catch (error) {
     console.error('[❌ getLoanMeta 실패]', error.response?.data || error.message);
     throw error;

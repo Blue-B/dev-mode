@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "node-cron": "^4.1.0"
+  },
+  "devDependencies": {
+    "jsdoc": "^4.0.4"
   }
 }
