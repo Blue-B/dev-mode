@@ -109,13 +109,13 @@ npm start
 
 서버의 전체 엔드포인트에 대한 명세입니다. 아래 링크에서 확인하실 수 있습니다.
 
-- **[백엔드 API 명세서 바로가기](./API.md)**
+- **[백엔드 API 명세서 바로가기](https://blue-b.github.io/kkangbu/API.md)**
 
 ### 2. 프론트엔드 API 명세서 (JSDoc)
 
 프론트엔드 `services/api.js` 모듈의 함수 명세입니다. 소스 코드의 JSDoc 주석을 기반으로 자동 생성된 웹 문서입니다.
 
-- **[프론트엔드 API 웹 문서 바로가기](https://kjaewon4.github.io/kkangbu/frontend/)**
+- **[프론트엔드 API 웹 문서 바로가기](https://blue-b.github.io/kkangbu/)**
 
 > **참고:** 위 링크가 작동하려면 아래의 GitHub Pages 설정이 필요합니다. 만약 로컬에서 문서를 생성하고 확인하려면, 프로젝트 루트에서 `npm run docs` 명령 실행 후 `docs/frontend/index.html` 파일을 브라우저로 열어주세요.
 
