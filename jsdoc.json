@@ -1,7 +1,7 @@
 {
   "source": {
-    "include": ["application/client/loan-client/src", "chaincode"],
-    "includePattern": ".+\\.js(x)?$",
+    "include": ["application/client/loan-client/src"],
+    "includePattern": ".+\\.jsx?$",
     "excludePattern": "(node_modules/|docs)"
   },
   "plugins": ["plugins/markdown"],

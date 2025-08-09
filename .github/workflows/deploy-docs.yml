@@ -44,6 +44,9 @@ jobs:
       - name: Build JSDoc
         run: npm run docs
 
+      - name: Convert API.md to HTML
+        run: npx --yes marked -i API.md -o docs/frontend/backend-api.html
+
       # 5. GitHub Pages에 배포할 결과물을 준비
       - name: Setup Pages
         uses: actions/configure-pages@v4
