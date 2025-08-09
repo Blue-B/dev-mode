@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "docs": "jsdoc -c jsdoc.json"
+  },
   "dependencies": {
     "node-cron": "^4.1.0"
   },

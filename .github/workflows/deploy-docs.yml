@@ -3,10 +3,10 @@ name: Deploy JSDoc to GitHub Pages
 
 # 언제 이 워크플로우를 실행할지 정의
 on:
-  # main 브랜치에 push 이벤트가 발생할 때마다 실행
+  # team5 브랜치에 push 이벤트가 발생할 때마다 실행
   push:
     branches:
-      - main
+      - team5
 
 # 워크플로우 실행에 필요한 권한 설정
 permissions:
