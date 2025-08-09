@@ -44,8 +44,15 @@ jobs:
       - name: Build JSDoc
         run: npm run docs
 
+      # 4.1 백엔드 API(Markdown)를 HTML로 변환하여 동일 산출물에 포함
       - name: Convert API.md to HTML
         run: npx --yes marked -i API.md -o docs/frontend/backend-api.html
+
+      # 4.2 README가 참조하는 정적 자산(이미지 등) 포함
+      - name: Copy static assets
+        run: |
+          mkdir -p docs/frontend/assets
+          cp -r assets/* docs/frontend/assets/
 
       # 5. GitHub Pages에 배포할 결과물을 준비
       - name: Setup Pages
